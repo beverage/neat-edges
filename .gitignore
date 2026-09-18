@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# Editor state
+.vscode/
+
+# Agent instructions are shared in AGENTS.md, which is vendor-neutral and
+# checked in. Assistant-specific files import it and add whatever is local to
+# one working copy, so they stay untracked.
+CLAUDE.md
+CLAUDE.local.md
+.cursorrules
+.cursor/
+.github/copilot-instructions.md
+
+# C# build output
+obj/
+bin/
+
+# Harness scratch: the isolated save-data folder and log run-harness.sh creates.
+# The log carries absolute home paths and testdata/ is a whole RimWorld Config
+# dump, so neither belongs in a public repository.
+dist/
+
+# Python bytecode from the art generator
+__pycache__/
+
+# RimWorld's texture cache. The game never writes these itself, but tools on
+# this machine do — and a .dds beside a PNG makes the game ignore the PNG
+# entirely, with no timestamp check. Both of this mod's textures are generated,
+# so a stale cache would silently pin an old ghost.
+*.dds
+
+# Build output. Only our own assembly is ever tracked — a non-Debug build
+# sweeps everything else out of the load path.
+Assemblies/*
+!Assemblies/NeatEdges.dll

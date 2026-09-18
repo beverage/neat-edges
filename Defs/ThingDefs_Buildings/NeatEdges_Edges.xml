@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- The two hard edges. Both are non-edifice overlay buildings that draw
+       nothing on the map: Building_InvisibleEdge no-ops Print, so the floor
+       already laid reads to the tile boundary with nothing over it.
+
+       They are things rather than terrain on purpose. Terrain has one slot per
+       cell and no rotation, so a terrain answer can only ever harden a whole
+       tile — and the only per-cell lever the engine offers there is
+       `isFoundation`, which drags the entire bridge vocabulary along with it.
+       A rotatable thing carries a DIRECTION, which is what an edge actually is,
+       and rotation-equality lets several share one cell (verified 1.6.4871:
+       same def + same rotation + same cell is the only combination refused, at
+       placement, spawn and construction alike).
+
+       defNames are permanent once shipped. -->
+
+  <ThingDef Name="NE_EdgeBase" ParentName="BuildingBase" Abstract="True">
+    <thingClass>NeatEdges.Building_InvisibleEdge</thingClass>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <!-- Non-edifice over non-edifice, and no build-area clearing: these must
+         coexist with furniture, zones and each other. -->
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <drawStyleCategory>Defenses</drawStyleCategory>
+    <designationCategory>Floors</designationCategory>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>false</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+  </ThingDef>
+
+  <!-- One edge, chosen by rotation. Stack them at different rotations on one
+       cell for any combination of edges — that is why there is no two-edge or
+       three-edge def. -->
+  <ThingDef ParentName="NE_EdgeBase">
+    <defName>NE_HardEdge</defName>
+    <label>hard edge</label>
+    <description>An unseen kerb set into the floor along one edge of a tile. Nothing shows above the surface — the floor simply meets whatever is beyond it at a clean line, instead of letting soil and water wash a ragged fringe across the boundary. Rotate to choose the edge, and place several on one tile for more than one.</description>
+    <graphicData>
+      <!-- Graphic_Single, and the rotation SHOULD spin it: the band sits along
+           the north edge of the texture, and Rotation names the hugged edge, so
+           one file draws the correct ghost for all four facings. -->
+      <texPath>NeatEdges/EdgeOne</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>NeatEdges/EdgeOne</uiIconPath>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <statBases>
+      <MaxHitPoints>40</MaxHitPoints>
+      <!-- No materials: it changes how an edge draws and nothing else, so a
+           cost would be charging for a rendering preference.
+
+           Work must stay ABOVE ZERO. Designator_Build.DesignateSingleCell
+           branches on `WorkToBuild == 0f` into the same path as god mode — a
+           direct ThingMaker/GenSpawn with no blueprint, no frame and no job —
+           which places instantly and leaves NOTHING TO CANCEL. A small non-zero
+           value keeps the normal blueprint flow, so a mis-dragged run is
+           cancelled like any other order. Nothing to haul, so the pawn goes
+           straight to the frame. -->
+      <WorkToBuild>35</WorkToBuild>
+      <Beauty>0</Beauty>
+      <Flammability>0</Flammability>
+    </statBases>
+    <uiOrder>2080</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- Quarter-turns from this thing's own Rotation, so one entry covers
+             all four facings. Measured, not assumed: the band sits in the north
+             margin of the texture, so Rotation names the hugged edge directly. -->
+        <edges>
+          <li>0</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- All four edges in one placement. Four hardened cardinals fill in all four
+       diagonals, which is every direction the blend gate can bleed from. -->
+  <ThingDef ParentName="NE_EdgeBase">
+    <defName>NE_HardEdgeAll</defName>
+    <label>hard edge (all sides)</label>
+    <description>An unseen kerb set into the floor around every edge of a tile. Nothing shows above the surface — the floor simply meets whatever is beyond it at a clean line on all four sides, instead of letting soil and water wash a ragged fringe across the boundary.</description>
+    <graphicData>
+      <texPath>NeatEdges/EdgeAll</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <uiIconPath>NeatEdges/EdgeAll</uiIconPath>
+    <!-- Nothing to choose, and `edges` is rotation-relative, so every facing
+         yields the same mask anyway. -->
+    <rotatable>false</rotatable>
+    <statBases>
+      <MaxHitPoints>40</MaxHitPoints>
+      <WorkToBuild>140</WorkToBuild>   <!-- four edges, four times the 35 -->
+      <Beauty>0</Beauty>
+      <Flammability>0</Flammability>
+    </statBases>
+    <uiOrder>2081</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <edges>
+          <li>0</li>
+          <li>1</li>
+          <li>2</li>
+          <li>3</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+</Defs>

@@ -1,0 +1,146 @@
+# Build, lint, and the invariants this codebase actually broke once each.
+# Zero secrets. Tag a commit v* to additionally get a packaged mod zip on a
+# GitHub Release. Workshop publishing is deliberately not automated here.
+# Each check is explained in docs/DEVELOPMENT.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      # pipefail matters here: GitHub's shell sets errexit but not pipefail, so
+      # a `find` that fails on a renamed directory would drop a whole tree out
+      # of validation and still show a green tick.
+      #
+      # Walked from the repo root rather than from a named list of directories,
+      # because this mod has no Patches/ or Languages/ yet and a hardcoded list
+      # would either fail on the missing ones now or silently skip them on the
+      # day they arrive.
+      - name: XML well-formedness
+        shell: bash
+        run: |
+          set -o pipefail
+          find . -name '*.xml' \
+            -not -path './.git/*' -not -path '*/obj/*' \
+            -not -path '*/bin/*' -not -path './dist/*' \
+            -print0 | xargs -0 xmllint --noout
+
+      # Hot-reload invariants, translation keys, XML-to-C# type bindings, the
+      # <Patch> root walk, the Workshop preview size, and the two checks that
+      # keep private tracker identifiers, internal vocabulary and absolute home
+      # paths out of a public repository. One script, so the same checks run
+      # locally before a push — see its docstring for why each one exists.
+      #
+      # The leak checks are why this file exists: a tracker id and an internal
+      # role word reached devtools/run-harness.sh, were stripped by hand, and
+      # nothing stopped them coming back.
+      - name: Static invariants
+        run: python3 devtools/check-invariants.py
+
+      # The same gate against the COMMITTED dll, and it has to run before the
+      # build below: that build overwrites Assemblies/NeatEdges.dll, so a
+      # harness dll committed by mistake would be silently replaced by a clean
+      # one and no later step could see it. run-harness.sh writes that path
+      # with -p:Harness=true and sweeps itself afterwards; this is what catches
+      # the run where the sweep did not happen.
+      - name: Committed dll ships no harness
+        run: python3 devtools/check-shipped-dll.py
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # No RimWorld install here, so the csproj's Exists() probes all miss and
+      # game references resolve from Krafs.Rimworld.Ref. That is the path this
+      # job is meant to exercise; reproduce it locally with
+      # -p:DisableLocalGameRefs=true.
+      - name: Build (Release)
+        run: dotnet build Source/NeatEdges/NeatEdges.csproj -c Release
+
+      # The harness must still COMPILE, and the step above does not build it:
+      # Release strips it (the csproj's HARNESS switch), so without this a
+      # harness file that stopped compiling would be found by the next person
+      # trying to run the harness, not here. Scratch output path — this build
+      # must never become the dll that ships.
+      - name: Build (Release + harness)
+        run: dotnet build Source/NeatEdges/NeatEdges.csproj -c Release -p:Harness=true -p:OutputPath=$RUNNER_TEMP/harness/
+
+      # The shipping build carries no harness, no -neatedges-harness flag and
+      # no occurrence of the word "harness" in either encoding — and it still
+      # carries the feature surface, which is what stops those absence checks
+      # passing on a truncated file. Type names live in #Strings as UTF-8 while
+      # the launch flag is a literal in #US as UTF-16, so an ASCII grep for the
+      # flag finds nothing whether or not it shipped; the script explains that
+      # trap and searches both encodings.
+      #
+      # This replaced an inline version of the same idea on 2026-09-18, so the
+      # check a human runs before pushing and the check CI runs are now the
+      # same code — and the inline one had neither the token sweep nor the
+      # required-types half, so it passed on an empty file.
+      #
+      # MUST follow both builds above: the harness build goes to a scratch
+      # path, so Assemblies/ still holds the Release build this inspects.
+      - name: Release build ships no harness
+        run: python3 devtools/check-shipped-dll.py
+
+      # Harmony is a compile-time package only. If ExcludeAssets="runtime" ever
+      # comes off, 0Harmony.dll lands here and the game loads a second copy of
+      # Harmony from a mod that is supposed to depend on it.
+      - name: Assemblies holds exactly our one dll
+        shell: bash
+        run: |
+          ls -la Assemblies/
+          count=$(ls Assemblies/ | wc -l)
+          if [ "$count" != "1" ]; then
+            echo "::error::Assemblies/ must hold exactly NeatEdges.dll (found $count entries)"
+            exit 1
+          fi
+
+  release:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build (Release)
+        run: dotnet build Source/NeatEdges/NeatEdges.csproj -c Release
+
+      # The zip is a thing players install, so it gets the same gate the
+      # checks job applies: no harness, no launch flag, feature surface
+      # intact. This job runs on its own checkout and builds its own dll, so
+      # the checks job passing says nothing about the bytes about to be
+      # zipped.
+      - name: Release zip ships no harness
+        run: python3 devtools/check-shipped-dll.py
+
+      # The zip is the mod folder a player drops into Mods/ — game-loaded
+      # content plus the human documents, no Source/, no CI, no dev tooling.
+      - name: Assemble mod folder
+        run: |
+          mkdir -p dist/NeatEdges
+          cp -R About Assemblies Defs Textures docs LICENSE README.md dist/NeatEdges/
+          cd dist && zip -r "NeatEdges-${GITHUB_REF_NAME}.zip" NeatEdges
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/NeatEdges-*.zip --title "$GITHUB_REF_NAME" --generate-notes

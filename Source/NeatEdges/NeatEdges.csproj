@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Neat Edges' only assembly. RimWorld is .NET Framework 4.7.2. Game
+       references resolve below, either from a local install or from
+       Krafs.Rimworld.Ref (the shift-change / apparel-painter pattern).
+
+       Harmony IS required here, unlike Apparel Painter: the whole feature is a
+       replacement body for SectionLayer_Terrain.Regenerate, which no def can
+       express. It comes from brrainz.harmony as its own mod, so the package is
+       compile-time only. -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>NeatEdges</RootNamespace>
+    <AssemblyName>NeatEdges</AssemblyName>
+    <Version>0.1.0</Version>
+    <Configurations>Debug;Release</Configurations>
+
+    <!-- Straight into the mod's load path, no framework subfolder, no pdb —
+         the game cannot read one. -->
+    <OutputPath>../../Assemblies/</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>none</DebugType>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <!-- Two configurations and one switch:
+
+         Debug             HARNESS       iteration
+         Release           neither       shipping
+         Release+Harness   HARNESS       what run-harness.sh drives
+
+       HARNESS is Harness.cs entire — the regression suite, its flag-gated boot
+       and the -neatedges-harness launch flag. It does not ship. A player
+       cannot realistically find the flag, but it is ours to not leave lying in
+       their install, and what it starts spawns fixtures and then quits the
+       game.
+
+       The guard may only ever be whole-file, so a shipping build and a harness
+       build differ by the presence of the harness types and by nothing else —
+       no shipping code path changes shape with it. That is what keeps a
+       harness run meaningful for the assembly that goes out, now that the two
+       are not the same build; check-invariants.py enforces it. -->
+  <PropertyGroup Condition="'$(Configuration)' != 'Release' Or '$(Harness)' == 'true'">
+    <DefineConstants>$(DefineConstants);HARNESS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- net472 reference assemblies, so this builds on a machine with only the
+         modern dotnet SDK (this one is a Mac; there is no Framework targeting
+         pack outside the package). -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- ExcludeAssets="runtime" keeps 0Harmony.dll out of Assemblies/, which
+         must contain only our own dll. Harmony ships as its own mod. -->
+    <PackageReference Include="Lib.Harmony" Version="2.3.*" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Game references, two modes, one committed file. A machine with a RimWorld
+       install compiles against the REAL game assemblies in every configuration,
+       so go-to-definition decompiles engine bodies; a machine without one (CI,
+       a fresh clone) falls back to Krafs.Rimworld.Ref. To reproduce CI locally,
+       pass -p:DisableLocalGameRefs=true. Non-standard install: set
+       RimWorldManaged (env var or -p:). -->
+  <PropertyGroup>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' AND Exists('$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app/Contents/Resources/Data/Managed')">$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app/Contents/Resources/Data/Managed</RimWorldManaged>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' AND Exists('C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed')">C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed</RimWorldManaged>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' AND Exists('$(HOME)/.steam/steam/steamapps/common/RimWorld/RimWorldLinux_Data/Managed')">$(HOME)/.steam/steam/steamapps/common/RimWorld/RimWorldLinux_Data/Managed</RimWorldManaged>
+    <LocalGameRefs Condition="'$(RimWorldManaged)' != '' AND '$(DisableLocalGameRefs)' != 'true'">true</LocalGameRefs>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(LocalGameRefs)' != 'true'">
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.*" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(LocalGameRefs)' == 'true'">
+    <!-- Private=false is this group's ExcludeAssets: compile-time only. -->
+    <Reference Include="$(RimWorldManaged)/Assembly-CSharp.dll">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(RimWorldManaged)/UnityEngine.dll">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(RimWorldManaged)/UnityEngine.*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Any non-Debug build sweeps dev artifacts out of the mod's load path, so
+       Assemblies/ holds exactly the one dll the mod ships. -->
+  <Target Name="CleanDevArtifacts" AfterTargets="Build" Condition="'$(Configuration)' != 'Debug'">
+    <ItemGroup>
+      <DevJunk Include="$(OutputPath)*.dll" Exclude="$(OutputPath)$(AssemblyName).dll" />
+      <DevJunk Include="$(OutputPath)*.dll_orig" />
+      <DevJunk Include="$(OutputPath)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(DevJunk)" />
+  </Target>
+
+</Project>

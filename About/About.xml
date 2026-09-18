@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>Neat Edges</name>
+  <author>MrBeverage</author>
+  <packageId>MrBeverage.NeatEdges</packageId>
+  <url>https://github.com/beverage/neat-edges</url>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <modDependencies>
+    <li>
+      <packageId>brrainz.harmony</packageId>
+      <displayName>Harmony</displayName>
+      <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+      <downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+    </li>
+  </modDependencies>
+  <loadAfter>
+    <li>brrainz.harmony</li>
+    <li>Ludeon.RimWorld</li>
+    <li>Ludeon.RimWorld.Odyssey</li>
+  </loadAfter>
+  <description>Stop soil and water washing a ragged fringe across your floors.
+
+RimWorld fades every terrain one tile into whatever it touches, and the receiving tile gets no say in it — which is why a clean stone terrace meeting open ground always looks like it is dissolving at the rim. Bridges are the one thing in the game that escape it, and only because they are bridges.
+
+Neat Edges gives you that clean line anywhere. Place a hard edge along a tile edge and terrain stops bleeding across it. Nothing is drawn on the map: the floor you already laid simply meets the boundary cleanly.
+
+· Single edge — pick a side by rotating. Stack them on one tile for any combination.
+· All sides — one placement, the whole tile.
+· Corners close themselves. Where two hardened edges meet, the corner between them is sealed too, and a run terminates crisply instead of the fringe curling around its end.
+· Free of materials. It changes how an edge draws, nothing else.
+· An overlay toggle on the bottom-right row shows every hard edge on the map, because an invisible thing you cannot find is an invisible thing you cannot remove.
+
+Safe to add or remove at any time. Nothing is stored in your save beyond the markers themselves, and removing the mod removes them along with their effect — your floors and terrain are untouched.
+
+Works with any floor, from any mod, and with vanilla bridges alongside.</description>
+</ModMetaData>
