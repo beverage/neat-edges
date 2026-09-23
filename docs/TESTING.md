@@ -15,6 +15,22 @@ this constellation get worked on at once, and refusing to start beside a running
 instance makes the gate unrunnable most of the day. `--exclusive` is the right
 mode for a final pre-release run.
 
+**A game running beside the harness keeps the dll it loaded.** `Mods/NeatEdges`
+is a symlink to this checkout, so that game loaded `Assemblies/NeatEdges.dll`
+from here. Neither build writes that file: both compile into `dist/build/`, and
+each result is copied in as `NeatEdges.dll.new` and renamed over the target. A
+rename swaps the directory entry and nothing else, so a running game keeps the
+file it opened and the next one to start loads the new one. On the way out the
+script runs `check-shipped-dll.py` and lists `Assemblies/`, and warns if that
+directory holds anything but the one shipping dll.
+
+A bare `dotnet build` promises none of that, so check for a running game before
+building straight into `Assemblies/`. On macOS with the .NET 9 SDK it happens to
+leave a running game alone, because MSBuild's copy unlinks the old file and
+clones in the new one (measured 2026-09-23). Where the runtime cannot clone, as
+on a volume without clone support, it truncates the existing file and writes
+into it.
+
 ## Alongside is not unattended
 
 **When the new window appears, click it once.** An unfocused RimWorld window

@@ -47,6 +47,11 @@
 # script launched. If you are about to reach for pkill to get past a message
 # here: don't. That is somebody's colony with unsaved progress in it.
 #
+# NOR DOES IT WRITE INTO THE DLL THAT GAME LOADED. Mods/NeatEdges is a symlink
+# to this checkout, so a colony running beside this script loaded
+# Assemblies/NeatEdges.dll from here. Neither build writes that file: both
+# compile into dist/build/, and deploy() swaps each one in by rename.
+#
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,6 +62,9 @@ APP="${RIMWORLD_APP:-$HOME/Library/Application Support/Steam/steamapps/common/Ri
 LIVE_CONFIG="${RIMWORLD_CONFIG:-$HOME/Library/Application Support/RimWorld/Config/ModsConfig.xml}"
 TESTDATA="$REPO/dist/testdata"
 LOG="$REPO/dist/harness.log"
+BUILD="$REPO/dist/build"
+CSPROJ="$REPO/Source/NeatEdges/NeatEdges.csproj"
+DLL="$REPO/Assemblies/NeatEdges.dll"
 PROC="RimWorld by Ludeon Studios"
 
 # Generous, because it has to cover the slow case: a full mod list beside a
@@ -144,20 +152,19 @@ fi
 # They are NOT in a shipping build (see the configuration table in the csproj),
 # so plain Release would launch a game that ignores the flag and sits there
 # until the timeout. Release codegen otherwise, exactly as shipped.
-dotnet build "$REPO/Source/NeatEdges/NeatEdges.csproj" -c Release -p:Harness=true >/dev/null \
+#
+# Into dist/build/, not Assemblies/: -p:OutputPath moves MSBuild's copy step and
+# the csproj's CleanDevArtifacts sweep together, so nothing here has touched the
+# load path yet. The dll check is what proves the redirect took. An OutDir set
+# anywhere beats OutputPath, and a build sent elsewhere that way still reports
+# success.
+rm -rf "$BUILD/harness"
+dotnet build "$CSPROJ" -c Release -p:Harness=true "-p:OutputPath=$BUILD/harness/" >/dev/null \
   || die "harness build failed — fix that first"
-
-# Leave Assemblies/ holding the SHIPPING dll again, whatever happens below.
-# The game's Mods entry is a symlink to this checkout, so an un-swept harness
-# build is what the next play session loads and what a careless `git add`
-# commits. Same philosophy as the csproj's CleanDevArtifacts target: hygiene by
-# construction, not by memory. It never changes this script's exit status.
-restore_shipping_dll() {
-  dotnet build "$REPO/Source/NeatEdges/NeatEdges.csproj" -c Release >/dev/null \
-    || printf 'WARNING: Assemblies/ still holds the HARNESS build. Rebuild with:
-         dotnet build Source/NeatEdges/NeatEdges.csproj -c Release\n' >&2
-}
-trap restore_shipping_dll EXIT
+[ -f "$BUILD/harness/NeatEdges.dll" ] \
+  || die "the harness build succeeded but left no dll in $BUILD/harness/.
+       Something overrides OutDir, so the build went somewhere else, possibly
+       straight into Assemblies/. Find out where before running this again."
 
 # THE BUILD IS NOT THE THING THE GAME LOADS.
 #
@@ -185,6 +192,72 @@ then
        residue — park it, do not delete it, and restore the symlink."
 fi
 printf 'load path: %s\n' "$ENTRY_REAL"
+
+# SWAP A BUILT DLL IN BY RENAME, NEVER BY WRITING INTO THE ONE A GAME LOADED.
+#
+# RimWorld loads Assemblies/NeatEdges.dll with Assembly.LoadFrom, which can
+# keep the file mapped for as long as the game runs, and writing into a mapped
+# file can change bytes under a live process. mv only swaps the directory
+# entry: a game that loaded the old file keeps it, the next one to start gets
+# the new one, and one starting mid-swap finds one complete dll or the other.
+#
+# A plain build into Assemblies/ promises none of that. On macOS with the .NET 9
+# SDK it happens to spare a running game, because MSBuild's copy unlinks the old
+# file and clones the new one in its place (measured 2026-09-23), though the
+# path is empty for a moment in between. Where the runtime cannot clone (a
+# volume without clone support, source and destination on different volumes, a
+# symlinked destination) it truncates the existing file and writes into it.
+#
+# The .new sits beside its target because a rename is only atomic within one
+# filesystem; from anywhere else, mv falls back to copying.
+#
+# Last, the csproj's own CleanDevArtifacts, pointed back at Assemblies/. The
+# builds sweep dist/build/ now, and Assemblies/ must still hold exactly the one
+# dll. That target only deletes, and -t runs it without building anything.
+deploy() {
+  rm -f "$DLL.new"
+  if cp "$1" "$DLL.new" && mv -f "$DLL.new" "$DLL"
+  then
+    dotnet msbuild "$CSPROJ" -nologo -v:q -t:CleanDevArtifacts -p:Configuration=Release >/dev/null
+  else
+    rm -f "$DLL.new"
+    return 1
+  fi
+}
+
+# Leave Assemblies/ holding the SHIPPING dll again, whatever happens below.
+# The game's Mods entry is a symlink to this checkout, so an un-swept harness
+# build is what the next play session loads and what a careless `git add`
+# commits. Same philosophy as the csproj's CleanDevArtifacts target: hygiene by
+# construction, not by memory.
+#
+# It never changes this script's exit status, so nothing in it may fail
+# unguarded. Under set -e, a bare failing command in an EXIT trap stops the trap
+# where it stands and exits with its own status instead: a PASS becomes a
+# failure, with the harness dll still in place. Measured on macOS's bash 3.2.
+#
+# Whatever happened, it then looks at what it left: the shipping check on the
+# dll, and a listing, because that check reads one file and cannot see what
+# else is in the directory.
+restore_shipping_dll() {
+  rm -rf "$BUILD/release" || true
+  dotnet build "$CSPROJ" -c Release "-p:OutputPath=$BUILD/release/" >/dev/null \
+    && deploy "$BUILD/release/NeatEdges.dll" \
+    || printf 'WARNING: restoring the shipping build failed partway; the checks below say what is left.\n' >&2
+  python3 "$REPO/devtools/check-shipped-dll.py" \
+    || printf 'WARNING: Assemblies/NeatEdges.dll is not the shipping build. If a game
+         may have it loaded, swap one in by rename, as this script does:
+           dotnet build Source/NeatEdges/NeatEdges.csproj -c Release -p:OutputPath="%s/"
+           cp "%s/NeatEdges.dll" Assemblies/NeatEdges.dll.new
+           mv Assemblies/NeatEdges.dll.new Assemblies/NeatEdges.dll\n' \
+      "$BUILD/release" "$BUILD/release" >&2
+  extra="$(ls -A "$REPO/Assemblies" 2>/dev/null | grep -vxF 'NeatEdges.dll' || true)"
+  [ -z "$extra" ] \
+    || printf 'WARNING: Assemblies/ must hold only NeatEdges.dll, and also holds:\n%s\n' "$extra" >&2
+}
+trap restore_shipping_dll EXIT
+
+deploy "$BUILD/harness/NeatEdges.dll" || die "could not deploy the harness build into Assemblies/"
 
 rm -rf "$TESTDATA"
 mkdir -p "$TESTDATA/Config"
