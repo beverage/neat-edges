@@ -1,9 +1,9 @@
 # AGENTS.md
 
-A RimWorld 1.6 mod that stops terrain fading across a tile boundary. Two
-placeable markers, one Harmony assembly, two generated placeholder textures.
-It ships no floors and no terrain of its own — it changes how *other* people's
-floors meet what they touch.
+A RimWorld 1.6 mod that stops terrain fading across a tile boundary. One
+placeable marker and a drag-painted area, one Harmony assembly, three generated
+placeholder textures. It ships no floors and no terrain of its own — it changes
+how *other* people's floors meet what they touch.
 
 | Doc | Contents |
 |---|---|
@@ -58,9 +58,9 @@ not claim a rendering change works without saying how it was checked.
 
 `SectionLayer_Terrain.Regenerate` paints a neighbouring terrain's fade into a
 cell as a 9-vertex fan, and **the receiving cell never gets a say** — the gate
-reads terrain defs and the foundation grid, nothing else. This mod replaces
-that method and gives the cell a say, driven by the marked things standing on
-it.
+reads terrain defs and the foundation grid, nothing else. This mod transpiles
+that method and gives the cell a say, driven by the markers standing on it and
+by the painted area.
 
 Three concepts, and they are not interchangeable:
 
@@ -78,11 +78,13 @@ mechanisms are needed; neither replaces the other.
 
 ## Rules that validate fine and fail later
 
-**`Patch_SidedFadeBlock` is a COPIED METHOD BODY.** It is vanilla's
-`Regenerate` verbatim plus the lines marked `SIDED`. Re-diff it against the
-decompile on every game update. It fails safe — a missing reflection handle
-logs once and returns control to vanilla — but it cannot detect vanilla
-*changing* around it.
+**`Patch_SidedFadeBlock` is a TRANSPILER with three anchors, not a copied
+body.** A copy was tried first and silently stripped every Dub's Paint Shop
+colour, because a prefix that skips the original also skips every other mod's
+transpiler. Anchors fail safe — any one missing logs once and passes the method
+through untouched — but they cannot tell a right instruction from a plausible
+wrong one, which is why the startup log line reports each anchor's position and
+candidate count. Re-check them on every game update.
 
 **The patch deliberately covers `SectionLayer_Watergen` too.** That class
 subclasses `SectionLayer_Terrain` and inherits `Regenerate`, so patching here
@@ -113,21 +115,65 @@ not assumed. Change the art and that relationship must be re-measured.
 **The overlay must ship.** A marker leaves no trace anywhere in the vanilla UI:
 the terrain readout names the floor, the build menu shows the floor, and the
 only way to remove one is to deconstruct a thing you cannot see. The toggle on
-the bottom-right row is the sole way to find one. It shares `EdgeMaskAt` with
-the renderer on purpose — what is highlighted and what is hardened cannot drift.
+the bottom-right row is the sole way to find one. It asks which markers stand
+on each cell, not the derived mask: one marker tidies six tiles, and asking the
+derived mask turned overlapping runs into blobs that located nothing. The
+painted area shows on the same toggle through its own drawer, in the same
+colour, and is deliberately not counted in the marker predicate, or every
+painted tile would be tinted twice.
 
 **Map components are scribed by type.** `MapComponent_EdgeOverlay` is compiled
 unconditionally; one that existed only under a build symbol would make every
 save taken with it log a missing-type error without it.
+
+## The painted area
+
+**A painted tile is four hardened edges to the mask, and nothing more.** It
+enters `ComputeOwnMask` as the four cardinal bits, and everything after that is
+the sided model unchanged. Keep it there. An area that short-circuits the model
+instead (skip the fan on the painted tile) protects only the receiving side,
+which is Perspective: Paths' behaviour and the thing this design exists to beat.
+The harness pins the equivalence cell by cell against four stacked single-edge
+markers.
+
+**There is no all-sides marker, on purpose.** One shipped briefly before
+release and was removed once the area covered whole tiles for free; no save
+ever kept one. Do not bring it back: it duplicates the area at the cost of a
+build order per tile.
+
+**`Area_HardEdges` saves exactly the base `Area` node, and must keep doing so.**
+An ID and a grid is also exactly what Perspective: Paths writes, and that
+identity IS the migration. A scribed field added here loads at its default on
+every adopted area.
+
+**Its class name is permanent.** `NeatEdges.Area_HardEdges` is written into
+every map that has one. A rename needs a row in `Patch_AreaMigration.Adopted`,
+the same table that answers for Perspective: Paths.
+
+**Painting has to dirty the terrain mesh itself.** Vanilla's area bookkeeping
+refreshes the area overlay, the pathfinder and the region, and never a mesh,
+so the `Set` override is what makes a painted tile repaint. `Area.Clear()` and
+`Area.Invert()` bypass `Set`; nothing calls them on this area, because it is
+not player-deletable and so never appears in the manage-areas dialog.
+
+**The migration answers only a null lookup.** While Perspective: Paths is
+installed its class resolves first and the postfix never fires, so both mods
+can run through a switch-over. Never declare a type in another mod's namespace
+to catch its saves: it collides the moment both are loaded.
+
+**The area is created on first paint, never with the map**, and a map that
+loads with two is merged down to one at finalization. Everything resolves THE
+area as the first one found, so a second would keep hardening tiles the clear
+tool cannot reach.
 
 ## Scope rules
 
 **`NE_` prefixes defNames; textures live under `Textures/NeatEdges/`.** Both
 namespaces are global across every loaded mod.
 
-**No floors, no terrain, no art beyond the two ghosts.** This mod works with
-anyone's flooring; shipping its own would put it in competition with the
-mods it exists to serve.
+**No floors, no terrain, no art beyond the marker's ghost and the two tool icons.**
+This mod works with anyone's flooring; shipping its own would put it in
+competition with the mods it exists to serve.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this

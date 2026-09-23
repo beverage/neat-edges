@@ -6,14 +6,13 @@ using Verse;
 namespace NeatEdges
 {
     /// <summary>
-    /// Puts the hard-edge pad overlay on the bottom-right toggle row, beside
-    /// vanilla's roof, fertility and terrain-affordance overlays.
+    /// Puts the hard-edge overlay on the bottom-right toggle row, beside
+    /// vanilla's roof, fertility and terrain-affordance overlays. It shows the
+    /// markers and the painted area together.
     ///
     /// This SHIPS, deliberately. It started as a debug action, which was wrong
-    /// for the obvious reason: players do not run with dev mode on, and a pad
-    /// is undetectable without it — invisible under its floor, absent from the
-    /// build menu, and reachable only by an order button ("remove bridge") that
-    /// gives no hint it would do anything. "Where are my pads" is a question the
+    /// for the obvious reason: players do not run with dev mode on, and a marker
+    /// draws nothing on the map. "Where are my hard edges" is a question the
     /// player who placed them has to be able to answer, which is the test for a
     /// diagnostic that belongs in a shipped build.
     ///
@@ -25,6 +24,7 @@ namespace NeatEdges
     /// toggles. Matching vanilla would mean patching PlaySettings.ExposeData.
     /// </summary>
     [HarmonyPatch(typeof(PlaySettings), "DoPlaySettingsGlobalControls")]
+    [StaticConstructorOnStartup]   // static Texture2D: silences the startup check's "probably needs"
     public static class Patch_EdgeOverlayToggle
     {
         // TODO(art): placeholder. Vanilla's remove-bridge glyph is the only
@@ -45,7 +45,7 @@ namespace NeatEdges
             row.ToggleableIcon(
                 ref MapComponent_EdgeOverlay.ShowOverlay,
                 Icon,
-                "Highlight tiles built on a hard-edge pad.",
+                "NeatEdges.OverlayToggle".Translate(),
                 SoundDefOf.Mouseover_ButtonToggle);
         }
     }

@@ -24,7 +24,13 @@ namespace NeatEdges
     ///
     /// Selection is handled separately below, because brackets alone around an
     /// empty tile do not read as "there is a thing here".
+    ///
+    /// `StaticConstructorOnStartup` for the static material cache: without it,
+    /// RimWorld's startup check logs that the type "probably needs" the
+    /// attribute, in every dev-mode log. The cache already fills lazily on the
+    /// main thread, so the attribute changes nothing but the noise.
     /// </summary>
+    [StaticConstructorOnStartup]
     public class Building_InvisibleEdge : Building
     {
         /// <summary>How far into the tile the highlight reaches, in cells.</summary>

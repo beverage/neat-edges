@@ -54,10 +54,14 @@ namespace NeatEdges
         ///
         /// It also drops the cost by the same 24x the cache was buying, and
         /// without the cache: one thing-grid lookup per cell, no neighbours.
+        ///
+        /// Markers only. The painted area is drawn by its own drawer (see
+        /// <see cref="MapComponentUpdate"/>), in the same colour; counting it
+        /// here as well would tint every painted tile twice.
         /// </summary>
         internal bool HasBlocker(int index)
         {
-            return Patch_SidedFadeBlock.ComputeOwnMask(
+            return Patch_SidedFadeBlock.MarkerMask(
                 map.cellIndices.IndexToCell(index), map) != 0;
         }
 
@@ -67,6 +71,12 @@ namespace NeatEdges
         public override void FinalizeInit()
         {
             base.FinalizeInit();
+
+            // Load-time housekeeping for the painted area, here because this is
+            // the one hook that runs per map once every area has loaded. Both are
+            // idempotent, so running again on a later FinalizeInit is harmless.
+            Area_HardEdges.MergeDuplicates(map);
+            Patch_AreaMigration.AnnounceAdopted();
 
             // The drawer caches its mesh until told otherwise, so an edge placed
             // or removed while the overlay is up would not show.
@@ -90,11 +100,17 @@ namespace NeatEdges
             Invalidate();
         }
 
+        /// <summary>
+        /// One toggle shows both halves: the markers through this drawer, and
+        /// the painted area through the area's own, which vanilla otherwise
+        /// only draws while its designator is held.
+        /// </summary>
         public override void MapComponentUpdate()
         {
             if (!ShowOverlay) return;
             Drawer.MarkForDraw();
             Drawer.CellBoolDrawerUpdate();
+            Area_HardEdges.On(map)?.MarkForDraw();
         }
     }
 }

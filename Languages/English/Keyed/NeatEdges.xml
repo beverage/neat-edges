@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- The painted area -->
+  <NeatEdges.AreaLabel>hard edges</NeatEdges.AreaLabel>
+
+  <NeatEdges.DesignatorExpand>Expand hard edge area</NeatEdges.DesignatorExpand>
+  <NeatEdges.DesignatorExpandDesc>Paint tiles whose edges stay crisp. Terrain stops fading into a painted tile, and the painted tile stops fading into its neighbours.\n\nPainting is free and instant: nothing is built, and nothing is drawn on the map.</NeatEdges.DesignatorExpandDesc>
+
+  <NeatEdges.DesignatorClear>Clear hard edge area</NeatEdges.DesignatorClear>
+  <NeatEdges.DesignatorClearDesc>Remove tiles from the hard edge area, so their edges fade as normal again. Hard edge markers standing on those tiles keep working.</NeatEdges.DesignatorClearDesc>
+
+  <!-- The overlay toggle on the bottom-right row -->
+  <NeatEdges.OverlayToggle>Show hard edges: every tile with a hard edge marker on it, and the painted hard edge area.</NeatEdges.OverlayToggle>
+
+  <!-- Shown once, after loading a save whose areas came from Perspective: Paths -->
+  <NeatEdges.AdoptedAreas>Neat Edges took over the hard-edged areas you painted with Perspective: Paths. Paint or clear them from the Floors tab of the Architect menu.</NeatEdges.AdoptedAreas>
+
+</LanguageData>

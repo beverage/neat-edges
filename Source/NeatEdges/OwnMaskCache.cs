@@ -45,10 +45,18 @@ namespace NeatEdges
         internal readonly CellRect rect;
         internal readonly int[] values;
 
+        /// <summary>
+        /// Resolved once here, because finding it is a scan of the map's area
+        /// list and a section regeneration asks about 361 cells. Null when
+        /// nobody has painted, which costs the mask nothing.
+        /// </summary>
+        internal readonly Area_HardEdges area;
+
         internal OwnMaskCache(Map map, CellRect rect)
         {
             this.map = map;
             this.rect = rect;
+            area = Area_HardEdges.On(map);
 
             values = new int[rect.Width * rect.Height];
             for (int i = 0; i < values.Length; i++) values[i] = Unset;
@@ -63,7 +71,7 @@ namespace NeatEdges
         {
             if (!rect.Contains(cell))
             {
-                return Patch_SidedFadeBlock.ComputeOwnMask(cell, map);
+                return Patch_SidedFadeBlock.ComputeOwnMask(cell, map, area);
             }
 
             int i = (cell.z - rect.minZ) * rect.Width + (cell.x - rect.minX);
@@ -71,7 +79,7 @@ namespace NeatEdges
             int cached = values[i];
             if (cached != Unset) return cached;
 
-            int computed = Patch_SidedFadeBlock.ComputeOwnMask(cell, map);
+            int computed = Patch_SidedFadeBlock.ComputeOwnMask(cell, map, area);
             values[i] = computed;
             return computed;
         }

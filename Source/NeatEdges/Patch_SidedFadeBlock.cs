@@ -413,12 +413,41 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// Cardinals hardened by the things standing on this cell alone — no
-        /// neighbour awareness at all, which is what stops the recursion. The
-        /// only function that touches the thing grid, and the only one
+        /// Cardinals hardened by this cell alone: the markers standing on it,
+        /// plus all four if it is in the painted area. No neighbour awareness at
+        /// all, which is what stops the recursion. The only function that reads
+        /// the thing grid or the area, and the only one
         /// <see cref="OwnMaskCache"/> memoises.
+        ///
+        /// This overload resolves the area itself, which is a scan of the map's
+        /// area list: fine for a one-off question, wrong in a per-cell loop.
+        /// Loops hold the area, as the cache does.
         /// </summary>
         internal static int ComputeOwnMask(IntVec3 cell, Map map)
+        {
+            return ComputeOwnMask(cell, map, Area_HardEdges.On(map));
+        }
+
+        /// <summary>
+        /// A painted tile is four hardened edges, and deliberately nothing more:
+        /// it enters the model as own-mask bits, so two-sided hardening, corner
+        /// sealing and pinning apply to the area's outline by the same rules
+        /// the markers are tested against.
+        /// </summary>
+        internal static int ComputeOwnMask(IntVec3 cell, Map map, Area_HardEdges area)
+        {
+            int mask = MarkerMask(cell, map);
+            if (area != null && area[cell]) mask |= AllCardinals;
+            return mask;
+        }
+
+        /// <summary>
+        /// Cardinals hardened by the markers standing on this cell, and by
+        /// nothing else. The overlay asks this rather than the own mask: it
+        /// answers "where is the thing I would click", and the painted area has
+        /// its own overlay.
+        /// </summary>
+        internal static int MarkerMask(IntVec3 cell, Map map)
         {
             List<Thing> things = cell.GetThingList(map);
             int mask = 0;

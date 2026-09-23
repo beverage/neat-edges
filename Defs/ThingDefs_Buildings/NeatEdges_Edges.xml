@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Defs>
 
-  <!-- The two hard edges. Both are non-edifice overlay buildings that draw
-       nothing on the map: Building_InvisibleEdge no-ops Print, so the floor
-       already laid reads to the tile boundary with nothing over it.
+  <!-- The hard edge marker. A non-edifice overlay building that draws nothing
+       on the map: Building_InvisibleEdge no-ops Print, so the floor already
+       laid reads to the tile boundary with nothing over it.
+
+       There is one marker def, not two. Whole tiles are the painted area's
+       job (Area_HardEdges): a painted tile hardens exactly what four stacked
+       markers would, costs no build order, and drags out in one gesture. An
+       all-sides marker shipped briefly before release and was removed when
+       the area replaced it; no save ever kept one.
 
        They are things rather than terrain on purpose. Terrain has one slot per
        cell and no rotation, so a terrain answer can only ever harden a whole
@@ -87,40 +93,6 @@
              margin of the texture, so Rotation names the hugged edge directly. -->
         <edges>
           <li>0</li>
-        </edges>
-      </li>
-    </modExtensions>
-  </ThingDef>
-
-  <!-- All four edges in one placement. Four hardened cardinals fill in all four
-       diagonals, which is every direction the blend gate can bleed from. -->
-  <ThingDef ParentName="NE_EdgeBase">
-    <defName>NE_HardEdgeAll</defName>
-    <label>hard edge (all sides)</label>
-    <description>An unseen kerb set into the floor around every edge of a tile. Nothing shows above the surface — the floor simply meets whatever is beyond it at a clean line on all four sides, instead of letting soil and water wash a ragged fringe across the boundary.</description>
-    <graphicData>
-      <texPath>NeatEdges/EdgeAll</texPath>
-      <graphicClass>Graphic_Single</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <uiIconPath>NeatEdges/EdgeAll</uiIconPath>
-    <!-- Nothing to choose, and `edges` is rotation-relative, so every facing
-         yields the same mask anyway. -->
-    <rotatable>false</rotatable>
-    <statBases>
-      <MaxHitPoints>40</MaxHitPoints>
-      <WorkToBuild>140</WorkToBuild>   <!-- four edges, four times the 35 -->
-      <Beauty>0</Beauty>
-      <Flammability>0</Flammability>
-    </statBases>
-    <uiOrder>2081</uiOrder>
-    <modExtensions>
-      <li Class="NeatEdges.BlocksTerrainFade">
-        <edges>
-          <li>0</li>
-          <li>1</li>
-          <li>2</li>
-          <li>3</li>
         </edges>
       </li>
     </modExtensions>

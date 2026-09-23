@@ -78,8 +78,11 @@ it hardens. Everything else follows from that choice.
 RimWorld refuses a placement only when def, rotation **and** cell all match. A
 different rotation passes at every stage — placement, spawn and construction
 alike. So four `NE_HardEdge` markers at four rotations legally share one cell,
-and one def covers every combination of edges. The all-sides def exists to save
-three build orders, not because the combination was otherwise unreachable.
+and one def covers every combination of edges.
+
+An all-sides def shipped alongside it briefly, to save three build orders on a
+whole tile. It was removed before release once the painted area (§7) did the
+same job with no build orders at all; no save ever kept one.
 
 ## 4. What the code actually does
 
@@ -136,7 +139,7 @@ The counts fall out of the edge list rather than being hard-coded:
 | single | W | SW, W, NW — **3** |
 | corner (two adjacent) | N + W | SW, W, NW, N, NE — **5** |
 | runner (two opposite) | N + S | all but E and W — **6** |
-| all sides | N E S W | **8** |
+| all four (stacked, or a painted tile) | N E S W | **8** |
 
 ## 5. Why a transpiler
 
@@ -186,10 +189,13 @@ function that touches the thing grid, per operation:
 The overlay's own predicate was later narrowed to "does this cell carry a
 marker", which is one lookup per cell and needs no cache at all.
 
-## 7. Compared with an area-based approach
+The painted area adds one grid read per own-mask lookup. The area itself is
+found once per regeneration, in the cache's constructor, because finding it is a
+scan of the map's area list; a map nobody painted has none, and pays nothing.
 
-A reasonable alternative is to let the player designate a **region** and harden
-everything inside or around it. It is worth being clear about the trade, because
+## 7. The painted area: an area interface on the sided model
+
+Area and sided are not rival answers. They answer different questions, and
 neither wins outright.
 
 **Where area is better**
@@ -198,27 +204,111 @@ neither wins outright.
   a lap of the perimeter.
 - Nothing to get wrong about rotation.
 - The player thinks in areas already — zones, rooms, growing zones, home area.
+- It costs nothing. No build order, no pawn, no thing on the map: a RimWorld
+  `Area` is scribed, drag-painted and overlaid by the engine.
 
 **Where sided is better**
 
-- **It can express a one-sided boundary.** An area hardens its whole outline; it
-  cannot say "crisp against the courtyard, soft against the marsh". A sided
-  marker can, because the unit *is* the side.
-- **Corners are exact rather than inferred.** An area has to derive its own
-  outline and decide what to do at re-entrant corners; a sided model gets them
-  from the placed pieces and seals the shared corner points from the two edges
-  that actually meet there.
+- **It can express a one-sided boundary.** An area hardens every edge of every
+  tile it covers; it cannot say "crisp against the courtyard, soft against the
+  marsh". A sided marker can, because the unit *is* the side.
 - **It composes with visible trim.** The same marker extension is what Fine
   Establishments' floor borders carry, so a decorated strip hardens the edge it
   hugs. An area has nothing to attach to a piece of art.
-- **No terrain slot, no region state.** Markers are ordinary non-edifice things:
-  no foundation grid, no scribed area, and removing the mod removes them
-  cleanly.
 
-**The honest summary:** area is a better *interface* for the common case; sided
-is a better *model* of the thing. The two are not exclusive — an area designator
-that places sided markers around its outline would be the best of both, and is
-the obvious future work if the per-piece placement proves tedious. What should
-not happen is an area mechanism that hardens tiles as its unit, because that
-reintroduces exactly the corner and end-of-run artefacts this design exists to
-remove, and the project has now learned that lesson four times.
+**So the mod ships both, and they share one model.** A painted tile enters the
+mask as own-mask bits, exactly as four stacked markers do, and everything
+downstream is the sided model unchanged: two-sided edges, corner sealing,
+pinning. The harness pins that equivalence directly, comparing the 5×5 of edge
+masks around a painted tile with the 5×5 around four stacked single-edge
+markers, cell by cell.
+
+That is why this is not the thing an earlier version of this section warned
+against. The warning was about an area whose unit *replaces* the model — skip
+the fan on the painted tile and stop there, which is how Perspective: Paths
+works (read from its hook, not observed on screen). That protects only the
+receiving side: the painted tile's own terrain still fades **out** onto every
+unpainted neighbour that ranks at or below it, including a spike into each tile
+diagonally outside the region's corners, because nothing seals a corner that
+belongs to an unpainted tile.
+
+A painted tile here hardens both sides of each of its edges and seals those
+corners, by the same rules the markers are tested against.
+
+**The area's unit is the tile, and that is a real limit, not an oversight.**
+Painting two adjacent tiles of different floors hardens the edge between them
+too. Where only one side of a boundary should be crisp, the answer is still a
+marker.
+
+**Considered and not built: an area tool that places markers around its
+outline.** It would put build orders and things on the map for what is a
+rendering preference, and it cannot load another mod's saved areas, which are
+sets of tiles (§8).
+
+**The area is created on first paint**, not with every map. An empty area on
+every map would be one more node in every save, and a load error on every map
+of a player who later removes the mod, including maps where they never used it.
+
+The tools sit on the **Floors** tab beside the marker rather than the Zone tab
+with vanilla's areas. Special designators sort to the front of a tab by default,
+among Cancel and Remove floor; each tool sets its `Order` to 2082 or 2083 so it
+lands straight after the marker (uiOrder 2080).
+
+## 8. Taking over Perspective: Paths saves
+
+Perspective: Paths stores its per-tile override as an `Area` subclass,
+`PerspectivePaths.Area_InvertEdges`. Its original and its continued release
+both write that one class name. Its own FAQ tells players to clear their areas
+before removing it, and what happens otherwise is worse than losing one area
+(measured 2026-09-23 on a real colony save). The unresolvable node loads as a
+null list element; `AreaManager.UpdateAllAreasLinks` dereferences every element
+while loading, throws on the null, and the map's **whole** area manager fails to
+load. Home, allowed and roof areas all go with it. Anything that reads the area
+manager then fails in turn: on a 234-mod list, Hospitality's map component
+(whose saved state names the home area) and Vehicle Framework's pathing system
+(whose pathfinder constructor looks up road areas) both failed to build, and
+every thing on the map threw while spawning until RimWorld stopped logging.
+
+**Its saved node is a plain `Area`** — an ID and a grid, nothing else — and so
+is `Area_HardEdges`'s, which is why this mod must never add a scribed field to
+it. So the whole migration is answering one type lookup differently.
+
+**The lookup is `BackCompatibility.GetBackCompatibleType`**, and a postfix on it
+is the entire mechanism. `ScribeExtractor.SaveableFromNode` sends *every*
+deep-saved object's class name through that method, not only the missing ones,
+and the method ends in a plain type lookup; a postfix sees the final answer on
+every branch. It acts only when that answer is null, so while Perspective: Paths
+is installed its own class resolves first and nothing here fires. The two can
+run side by side through a switch-over.
+
+Called once per deep-saved object on every load, so the null check comes first.
+
+**Rejected: declaring `PerspectivePaths.Area_InvertEdges` ourselves**, the usual
+continued-mod trick. It squats another author's namespace, and it collides with
+the real class whenever both mods are loaded unless it sits behind a conditional
+load folder, which then owns all of this mod's folder resolution.
+
+**The names we answer for are a table, not a comparison.** If this mechanism
+ever moves into another mod, a save carrying `NeatEdges.Area_HardEdges` needs
+exactly the same treatment, and that should be one more row.
+
+Two loose ends, both handled at map finalization:
+
+- **A map can load with two areas** — one adopted, one painted here — if a save
+  ever ran with both mods and the player used both tools. `AreaManager` relinks
+  areas on load but never prunes them by type, and everything here takes the
+  first one found, so the second would keep hardening tiles the clear tool
+  could not reach. They are merged, through the indexer so the pathfinder and
+  the terrain mesh hear about every tile.
+- **The player is told once**, after the load, because a player switching mods
+  is looking for the old tool on the Zone tab.
+
+**The visible difference is disclosed, not hidden.** An adopted tile is a
+painted tile, so it also stops fading out onto its neighbours and its region's
+corners close (§7). Edges around adopted areas come out a little crisper than
+Perspective: Paths drew them.
+
+The clean-room line is deliberate. Perspective: Paths carries no licence, on
+its files, its Workshop pages or its repository, so nothing here is taken from
+its code. What it contributed is the idea that an `Area` is the right store for
+whole-tile hardening, and the README credits it for that.

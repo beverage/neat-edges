@@ -4,15 +4,15 @@ using Verse;
 namespace NeatEdges
 {
     /// <summary>
-    /// Applies the mod's patches once at game start.
+    /// Applies the mod's patches once at game start. None replaces a method:
     ///
-    /// Three of the four are additive and degrade to vanilla if they throw: the
-    /// overlay toggle, the mesh invalidation on spawn/despawn, and (in Fine
-    /// Establishments' build) the mouseover line. The fourth,
-    /// <see cref="Patch_SidedFadeBlock"/>, is a REPLACEMENT body for
-    /// `SectionLayer_Terrain.Regenerate` — it carries its own fail-safe, and
-    /// returns control to vanilla rather than throwing if the mesh API it needs
-    /// is not where it expects.
+    ///   <see cref="Patch_SidedFadeBlock"/>       transpiler on SectionLayer_Terrain.Regenerate;
+    ///                                            passes the method through untouched if any
+    ///                                            anchor is missing
+    ///   <see cref="Patch_SidedFadeInvalidate"/>  repaints terrain when a marker spawns or goes
+    ///   <see cref="Patch_EdgeOverlayToggle"/>    the bottom-right overlay toggle
+    ///   <see cref="Patch_AreaMigration"/>        answers a save's type lookup for Perspective:
+    ///                                            Paths' area, and only when nothing else did
     /// </summary>
     [StaticConstructorOnStartup]
     public static class HarmonyInit

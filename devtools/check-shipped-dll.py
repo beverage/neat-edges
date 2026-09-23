@@ -112,10 +112,14 @@ FORBIDDEN_TOKENS = [
 #   Patch_SidedFadeBlock     the replacement Regenerate body — the whole feature
 #   Patch_SidedFadeInvalidate  what keeps the mask cache honest as markers move
 #   MapComponent_EdgeOverlay the placement overlay
+#   Area_HardEdges           the painted area, named in every save that has one
+#   Designator_AreaHardEdges*  its two tools, bound from Patches/ by name
+#   Patch_AreaMigration      what loads Perspective: Paths' saved areas as ours
 #
-# The first two are the reason this list is not belt-and-braces: a missing
-# thingClass or modExtension is a def-load error a player sees as two buildings
-# that place and do nothing, and the dll still loads fine.
+# The bound-by-name entries are the reason this list is not belt-and-braces: a
+# missing thingClass or modExtension is a def-load error a player sees as two
+# buildings that place and do nothing, a missing designator is a Floors tab
+# without the paint tools, and the dll still loads fine in every case.
 REQUIRED_TYPES = [
     "Building_InvisibleEdge",
     "BlocksTerrainFade",
@@ -123,6 +127,10 @@ REQUIRED_TYPES = [
     "Patch_SidedFadeBlock",
     "Patch_SidedFadeInvalidate",
     "MapComponent_EdgeOverlay",
+    "Area_HardEdges",
+    "Designator_AreaHardEdgesExpand",
+    "Designator_AreaHardEdgesClear",
+    "Patch_AreaMigration",
 ]
 
 failures = []

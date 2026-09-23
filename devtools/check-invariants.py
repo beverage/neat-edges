@@ -166,14 +166,18 @@ def check_xml_bindings():
         for match in re.finditer(r"\b(?:class|struct)\s+([A-Za-z0-9_]+)", text):
             declared.add(match.group(1))
 
-    # Only where XML actually names a TYPE: a Class="" attribute, or an element
-    # whose name ends in Class (compClass, thingClass, graphicClass). Both
-    # forms are live in this mod's defs — <thingClass> on the buildings and
-    # Class="" on the modExtension — so neither half of this pattern is
-    # speculative.
+    # Only where XML actually names a TYPE: a Class="" attribute, an element
+    # whose name ends in Class (compClass, thingClass, graphicClass), or a bare
+    # list entry holding a namespaced name, which is how a type list such as
+    # specialDesignatorClasses is written. All three are live here — <thingClass>
+    # on the buildings, Class="" on the modExtension, and <li> in
+    # Patches/NeatEdges_Designators.xml — so no part of this pattern is
+    # speculative. The last one fails quietest of all: a renamed designator just
+    # leaves the Floors tab without its tools.
     binding = re.compile(
         r'(?:Class\s*=\s*"%s\.([A-Za-z0-9_]+)"'
-        r'|<[A-Za-z0-9_]*[Cc]lass>\s*%s\.([A-Za-z0-9_]+)\s*</)' % (NAMESPACE, NAMESPACE)
+        r'|<[A-Za-z0-9_]*[Cc]lass>\s*%s\.([A-Za-z0-9_]+)\s*</'
+        r'|<li>\s*%s\.([A-Za-z0-9_]+)\s*</li>)' % (NAMESPACE, NAMESPACE, NAMESPACE)
     )
     for base, _, names in os.walk(ROOT):
         if any(part in base for part in (".git", "obj", "bin", "dist", "Languages")):
@@ -187,7 +191,7 @@ def check_xml_bindings():
             except OSError:
                 continue
             for match in binding.finditer(text):
-                named = match.group(1) or match.group(2)
+                named = match.group(1) or match.group(2) or match.group(3)
                 if named not in declared:
                     line = text.count("\n", 0, match.start()) + 1
                     fail("bindings", "%s:%d names %s.%s — no such type in Source/"
