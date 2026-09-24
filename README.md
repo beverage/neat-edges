@@ -18,18 +18,23 @@ Everything is on the **Floors** tab of the Architect menu:
 - **Expand hard edge area** and **Clear hard edge area** do whole tiles, every
   edge at once, painted by dragging the way you paint a home area. Painting is
   free and instant, with no build order and no pawn involved.
+- **Floor border**, **floor border corner** and **floor runner border** are
+  visible trim: strips set into the floor along one edge, around a corner, or
+  down both sides of a corridor. Built from wood, stone or metal, they take
+  paint, and each hardens the edges it covers.
 
-Nothing is drawn on the map. The floor you already laid meets the boundary
-cleanly instead of being washed over.
+The marker and the area draw nothing on the map. The floor you already laid
+meets the boundary cleanly instead of being washed over.
 
 **Corners close themselves.** Where two hardened edges meet, the corner between
 them is sealed too, and a run ends crisply instead of the fringe curling around
 its last tile. A painted tile gets the same treatment on every side: terrain
 stops fading into it, and it stops fading out onto its neighbours.
 
-**The markers cost no materials**, since they change how an edge draws and
+**The marker costs no materials**, since it changes how an edge draws and
 nothing else. Each still takes a moment of work, so a mis-dragged run can be
-cancelled like any other order.
+cancelled like any other order. The trims cost their material, like any other
+building.
 
 **An overlay toggle** on the bottom-right row shows every marker and the painted
 area. An invisible thing you cannot find is an invisible thing you cannot
@@ -56,12 +61,12 @@ Works with any floor from any mod, alongside vanilla bridges, and with Dub's
 Paint Shop colours intact. Requires
 [Harmony](https://steamcommunity.com/workshop/filedetails/?id=2009463077).
 
-You can add it to a running save. Removing it drops the markers and the painted
-area: RimWorld logs an error for each missing type on the next load, and your
-floors and terrain are untouched.
+You can add it to a running save. Removing it drops the markers, the trims and
+the painted area: RimWorld logs an error for each missing type on the next load,
+and your floors and terrain are untouched.
 
-If you also run **Fine Establishments**, its floor border strips harden the edge
-they hug automatically while this is installed.
+Other mods can make their own decorations harden edges too, through the same
+extension the trims carry, with no dependency on this one beyond a `MayRequire`.
 
 ## Licence
 

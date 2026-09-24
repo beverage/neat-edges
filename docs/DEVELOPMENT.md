@@ -90,13 +90,16 @@ applied perfectly and did nothing.
 
 ## Textures
 
-All three are generated, never hand-edited:
+Every texture is generated, never hand-edited:
 
 ```bash
 python3 devtools/make_edge_art.py
+python3 devtools/make_trim_art.py
+python3 devtools/check_trims.py
 ```
 
-`EdgeOne` is only ever the marker's placement ghost and build-menu icon —
+`make_edge_art.py` draws the marker and the area tools. `EdgeOne` is only ever
+the marker's placement ghost and build-menu icon —
 nothing is drawn on the map. That is not optional decoration: a fully
 transparent texture was tried first and made the marker unplaceable, because
 the ghost, the rotation preview and the selected thing all draw from the same
@@ -107,6 +110,24 @@ ring (a tile hard on every side) with a plus or a minus.
 rotation spins it, which is what makes `Rotation` name the hugged edge with no
 offset. Change that art and the relationship must be re-measured — the harness
 pins it (`mask.rotation.*`) so an inversion fails loudly.
+
+`make_trim_art.py` draws the three trims: thirteen PNGs under
+`Textures/NeatEdges/Trim/`, the facings of each piece plus build-menu icons for
+the border and the runner. The straight border has no west facing because the
+engine's mirror of its east is correct for one rail; the runner's is authored
+(see DESIGN §9). Everything is greyscale, so the stuff tints it and paint
+recolours it. The script came from Fine Establishments with the trims and
+writes the same bytes that mod shipped; `trim_kit.py` is the part of that mod's
+texture kit it needs: the canvas, the house greys and the PNG writer.
+
+`check_trims.py` composes the trims into runs on `dist/_trims.png`, with the
+defs' 4% overdraw modelled, because no trim is ever seen alone: a corridor of
+runners, runners meeting straight borders, east beside west, and a run that
+stops. It exits non-zero if the runner's rail drifts off the straight border's,
+or if `FloorBorderDouble_west.png` goes missing while the art still needs it.
+The trims' `edges` are measured from this art, so a change that moves a band
+also means re-measuring them; the harness pins every rotation
+(`trims.masks.*`).
 
 A `.dds` beside a PNG silently shadows it with no timestamp check, so a
 regenerated texture can appear not to change. `*.dds` is gitignored; delete one
@@ -130,9 +151,12 @@ if a texture refuses to update.
 | `Harness.cs` | the regression cases — see [TESTING.md](TESTING.md) |
 | `HarmonyInit.cs` | `PatchAll`, and the startup anchor report |
 
-Outside `Source/`: `Patches/NeatEdges_Designators.xml` puts the two tools on
-the Floors tab, and `Languages/English/Keyed/NeatEdges.xml` holds every string
-the C# shows a player.
+Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
+(`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
+`Patches/NeatEdges_Designators.xml` puts the two area tools on the Floors tab,
+and `Languages/English/Keyed/NeatEdges.xml` holds every string the C# shows a
+player. `devtools/` holds the art generators and the trims' sheet (see
+Textures), the two static checks and the harness runner.
 
 ## Things that will waste an afternoon
 

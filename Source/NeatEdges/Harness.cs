@@ -141,6 +141,8 @@ namespace NeatEdges
             Guard("mask.twoSided", () => CaseHardeningIsTwoSided(map));
             Guard("mask.cornerSeal", () => CaseOutsideCornerSeals(map));
             Guard("mask.stacking", () => CaseStackingCombines(map));
+            Guard("trims.defs", CaseTrimDefs);
+            Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("area.designators", CaseAreaDesignatorsRegistered);
             Guard("area.equalsFourEdges", () => CaseAreaEqualsFourEdges(map));
             Guard("area.clear", () => CaseAreaClearRestores(map));
@@ -209,7 +211,10 @@ namespace NeatEdges
 
         internal static void Place(Map map, IntVec3 cell, ThingDef def, Rot4 rot)
         {
-            Thing t = ThingMaker.MakeThing(def);
+            // The trims are stuffable, and MakeThing without a stuff for one
+            // logs an error; the markers are not, and DefaultStuffFor answers
+            // null for them, which is what MakeThing expects.
+            Thing t = ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
             t.SetFactionDirect(Faction.OfPlayer);
             Spawned.Add(GenSpawn.Spawn(t, cell, map, rot));
         }
@@ -449,6 +454,72 @@ namespace NeatEdges
             Place(map, c, Single, Rot4.East);
             Place(map, c, Single, Rot4.South);
             Place(map, c, Single, Rot4.West);
+        }
+
+        // ---- the visible trims ------------------------------------------
+
+        internal static readonly string[] TrimNames =
+            { "NE_FloorBorder", "NE_FloorBorderCorner", "NE_FloorBorderDouble" };
+
+        /// <summary>
+        /// The three trims load, stuffable and paintable, each carrying the
+        /// extension. A trim without the extension is decoration and nothing
+        /// more, and nothing in game would say so.
+        /// </summary>
+        internal static void CaseTrimDefs()
+        {
+            foreach (string name in TrimNames)
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
+                bool ok = def != null && def.MadeFromStuff
+                    && def.building != null && def.building.paintable
+                    && def.GetModExtension<BlocksTerrainFade>() != null;
+                Check(ok, "trims.defs." + name,
+                    def == null ? "missing"
+                        : $"stuff {def.MadeFromStuff}, paintable {def.building?.paintable}, "
+                          + $"extension {def.GetModExtension<BlocksTerrainFade>() != null}");
+            }
+        }
+
+        /// <summary>
+        /// Each trim hardens exactly the edges its art covers, at every
+        /// rotation. The expected edges are written out rather than computed
+        /// from the production formula, so a wrong offset in either the defs
+        /// or the formula fails here instead of agreeing with itself. They
+        /// come from the textures: the border's band sits in the north margin
+        /// of _north; the corner's north facing covers N and E; the runner's
+        /// covers N and S.
+        ///
+        /// Adjacency indices: S=0, W=2, N=4, E=6.
+        /// </summary>
+        internal static void CaseTrimMasks(Map map)
+        {
+            Rot4[] rots = { Rot4.North, Rot4.East, Rot4.South, Rot4.West };
+            int[][] border = { new[] { 4 }, new[] { 6 }, new[] { 0 }, new[] { 2 } };
+            int[][] corner = { new[] { 4, 6 }, new[] { 6, 0 }, new[] { 0, 2 }, new[] { 2, 4 } };
+            int[][] runner = { new[] { 4, 0 }, new[] { 6, 2 }, new[] { 0, 4 }, new[] { 2, 6 } };
+            int[][][] expected = { border, corner, runner };
+
+            for (int t = 0; t < TrimNames.Length; t++)
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(TrimNames[t]);
+                if (def == null) { Skip("trims.masks." + TrimNames[t], "def missing"); continue; }
+
+                for (int r = 0; r < rots.Length; r++)
+                {
+                    Clear();
+                    IntVec3 c = Origin(map);
+                    Place(map, c, def, rots[r]);
+
+                    int want = 0;
+                    foreach (int dir in expected[t][r]) want |= 1 << dir;
+                    int got = Patch_SidedFadeBlock.MarkerMask(c, map);
+
+                    Check(got == want, $"trims.masks.{TrimNames[t]}.{rots[r].ToStringHuman()}",
+                        $"got {Show(got)}, expected {Show(want)}");
+                }
+            }
+            Clear();
         }
 
         // ---- the painted area -------------------------------------------

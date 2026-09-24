@@ -212,9 +212,9 @@ neither wins outright.
 - **It can express a one-sided boundary.** An area hardens every edge of every
   tile it covers; it cannot say "crisp against the courtyard, soft against the
   marsh". A sided marker can, because the unit *is* the side.
-- **It composes with visible trim.** The same marker extension is what Fine
-  Establishments' floor borders carry, so a decorated strip hardens the edge it
-  hugs. An area has nothing to attach to a piece of art.
+- **It composes with visible trim.** The same marker extension is what the
+  trims carry (§9), so a decorated strip hardens the edge it hugs. An area has
+  nothing to attach to a piece of art.
 
 **So the mod ships both, and they share one model.** A painted tile enters the
 mask as own-mask bits, exactly as four stacked markers do, and everything
@@ -312,3 +312,40 @@ The clean-room line is deliberate. Perspective: Paths carries no licence, on
 its files, its Workshop pages or its repository, so nothing here is taken from
 its code. What it contributed is the idea that an `Area` is the right store for
 whole-tile hardening, and the README credits it for that.
+
+## 9. The visible trims
+
+A border strip, its corner and a double-rail runner: 1×1 non-edifice buildings
+at a floor-covering altitude that dress a cell without owning it, so they
+coexist with any terrain and with furniture. Stuffable and paintable. Each
+carries `BlocksTerrainFade` for the edges its art covers, so a decorated strip
+is also a hard edge, by the same two-sided, corner-sealing rules as the
+invisible marker.
+
+They began in Fine Establishments and moved here on 2026-09-24, because what
+makes a trim more than decoration is this mod's mechanism. The art came with
+them: `devtools/make_trim_art.py` is that mod's drawing code, and it writes the
+same PNGs byte for byte. Their defNames took this mod's `NE_` prefix on the
+way; the saves that held the old names were patched once by a script in Fine
+Establishments' devtools, since a compatibility shim is for players of a
+published mod and that one was never published.
+
+- **The border hugs one edge and rotates to pick which.** A centred linked band
+  was built first and rejected in play: a link mask can never say which side
+  its wall is on, so an edge-hugging piece has to rotate instead of link.
+- **The corner is one rotatable def with four explicit textures.** The piece is
+  chiral (a mirrored east would duplicate the south corner), and owning both
+  bands in one image is what lets them join cleanly: two separate strips never
+  can, since neither texture knows the other.
+- **The runner authors its own west facing.** The engine mirrors east for a
+  missing west, which flips the absolute lighting across both rails at once:
+  fine for a one-rail strip (a flipped right-edge strip *is* a left-edge
+  strip), wrong for the piece that owns the pair. `check_trims.py` re-derives
+  whether the mirror is still dangerous rather than trusting a comment.
+- **Two straights at different rotations stack on one cell**, by the same
+  rotation-equality rule as the markers (§3). The runner exists for the
+  ergonomics, a corridor's two rails in one drag, and so one image owns both
+  rails. It costs double, so the convenient route is not also the cheap one.
+- **All three draw at 4% overdraw** (`drawSize 1.04`, square): at shared quad
+  edges the sampler resolves the two edge-texel columns differently as the
+  camera moves, and the overlap kills the shimmer.

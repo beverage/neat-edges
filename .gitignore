@@ -22,13 +22,13 @@ bin/
 # dump, so neither belongs in a public repository.
 dist/
 
-# Python bytecode from the art generator
+# Python bytecode from the art generators
 __pycache__/
 
 # RimWorld's texture cache. The game never writes these itself, but tools on
 # this machine do — and a .dds beside a PNG makes the game ignore the PNG
-# entirely, with no timestamp check. Both of this mod's textures are generated,
-# so a stale cache would silently pin an old ghost.
+# entirely, with no timestamp check. Every texture this mod ships is generated,
+# so a stale cache would silently pin old art.
 *.dds
 
 # Build output. Only our own assembly is ever tracked — a non-Debug build

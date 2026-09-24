@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- The visible trims: a border strip, its corner and the double-rail
+       runner. 1×1 non-edifice buildings that dress the floor without owning
+       the cell, so they coexist with furniture (only edifices wipe edifices)
+       and with any terrain, ours or another mod's. Stuffable and paintable.
+
+       Each carries BlocksTerrainFade for the edges its art covers, so a
+       decorated strip is also a hard edge: the hardening follows the same
+       rules as the invisible marker, two-sided, with corners sealed.
+
+       Moved here from Fine Establishments (2026-09-24), where they began, with
+       their art and generator (devtools/make_trim_art.py). They were renamed
+       from that mod's prefix on the way; its devtools carry a one-time save
+       patcher for the old names. defNames are permanent once shipped.
+
+       The border ROTATES to pick its edge rather than linking: a centred
+       linked band was built first and rejected in play, because a link mask
+       can never say which side its wall is on. -->
+
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorder</defName>
+    <label>floor border</label>
+    <description>A border strip set into the floor along one edge of a tile, running its full length, so a row of them reads as one continuous line. Rotate to choose the edge. The edge it covers stays crisp: terrain stops fading across it. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderEdge</texPath>
+      <graphicClass>Graphic_Multi</graphicClass>
+      <!-- Overdraw kills the joint shimmer: each piece is its own quad, and at
+           shared quad edges the sampler resolves the two edge-texel columns
+           differently as the camera moves, a hairline seam that colour-shifts
+           with scrolling (play, 2026-08-01). Drawing 4% past the tile covers
+           every joint with a neighbour's stable interior texels; identical art
+           overlapping identically is invisible. Square on purpose (the
+           east/west drawSize swap). check_trims.py models it. -->
+      <drawSize>(1.04,1.04)</drawSize>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorder_MenuIcon</uiIconPath>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>40</MaxHitPoints>
+      <WorkToBuild>150</WorkToBuild>
+      <Beauty>1</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>2</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <!-- Line-drag comes from the Defenses draw styles alone;
+         placingDraggableDimensions is a dead field in 1.6. -->
+    <drawStyleCategory>Defenses</drawStyleCategory>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2060</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- Measured, not assumed: decoding the facing PNGs puts the opaque
+             band in rows 0-34 of _north (the top 14%, i.e. the north edge)
+             and 221-255 of _south. Rotation names the hugged edge directly,
+             with no offset. -->
+        <edges>
+          <li>0</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- The corner: ONE rotatable def whose four facings are four explicit
+       textures. The piece is chiral (a mirrored east would duplicate the
+       south corner), and owning both bands in one image is what lets the two
+       join cleanly at all: two separate strips never can, since neither
+       texture knows the other. -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorderCorner</defName>
+    <label>floor border corner</label>
+    <description>Two border strips joined in an L around one corner of a tile. Rotate to choose which corner. Both edges it covers stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderCorner</texPath>
+      <graphicClass>Graphic_Multi</graphicClass>
+      <!-- Same 4% overdraw as the straight, same reason. -->
+      <drawSize>(1.04,1.04)</drawSize>
+    </graphicData>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>40</MaxHitPoints>
+      <WorkToBuild>150</WorkToBuild>
+      <Beauty>1</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>2</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2061</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- Two ADJACENT edges, so five directions harden: both cardinals plus
+             the three diagonals they flank. Measured from the four explicit
+             textures: north hugs N,E; east E,S; south S,W; west W,N. That is
+             offset 0 and +1 in every case. -->
+        <edges>
+          <li>0</li>
+          <li>1</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- The runner: both opposite edges in one piece, `| |`, or `=` turned a
+       quarter. Drag it down a corridor and the floor between the rails reads
+       as a runner.
+
+       ONE def covers both orientations because the figure is 180°-symmetric:
+       north is south's drawing and west is east's. Four textures, two
+       drawings, and unlike the straight, WEST IS AUTHORED rather than
+       auto-mirrored. A mirror flips the absolute lighting across both rails
+       at once, which is fine for a one-rail strip and wrong for a piece that
+       owns the pair. Delete FloorBorderDouble_west.png and the game silently
+       starts mirroring again; check_trims.py fails if it goes missing.
+
+       Two straights at DIFFERENT rotations also stack on one cell (the
+       engine's identical-thing gate skips anything whose rotation differs),
+       so this def exists for the ergonomics: one building instead of two,
+       one drag instead of two remembered rotations, and one image owning
+       both rails.
+
+       Costs are DOUBLED against the straight on purpose: a runner is two bands
+       of material, and pricing it as one would make the convenient route also
+       the cheap one. -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorderDouble</defName>
+    <label>floor runner border</label>
+    <description>A pair of border strips set into the floor along opposite edges of a tile, each running its full length. Lay a line of them down a corridor and the floor between the rails reads as a runner. Rotate to choose which pair of edges. Both edges stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderDouble</texPath>
+      <graphicClass>Graphic_Multi</graphicClass>
+      <!-- Same 4% overdraw as the straight: both rails sit on tile edges, so
+           neighbours in a run overlap identically. Square on purpose. -->
+      <drawSize>(1.04,1.04)</drawSize>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderDouble_MenuIcon</uiIconPath>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>80</MaxHitPoints>
+      <WorkToBuild>300</WorkToBuild>
+      <Beauty>2</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>4</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <drawStyleCategory>Defenses</drawStyleCategory>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2062</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- Two OPPOSITE edges, so six directions harden: both cardinals and
+             all four diagonals. Measured: north and south both hug N,S; east
+             and west both hug E,W. Offset 0 and +2. -->
+        <edges>
+          <li>0</li>
+          <li>2</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+</Defs>

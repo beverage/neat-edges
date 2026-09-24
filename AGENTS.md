@@ -1,14 +1,14 @@
 # AGENTS.md
 
-A RimWorld 1.6 mod that stops terrain fading across a tile boundary. One
-placeable marker and a drag-painted area, one Harmony assembly, three generated
-placeholder textures. It ships no floors and no terrain of its own — it changes
-how *other* people's floors meet what they touch.
+A RimWorld 1.6 mod that stops terrain fading across a tile boundary. An
+invisible marker, a drag-painted area and three visible trims; one Harmony
+assembly; generated textures. It ships no floors and no terrain of its own — it
+changes how *other* people's floors meet what they touch.
 
 | Doc | Contents |
 |---|---|
 | [README.md](README.md) | what the mod does, for players |
-| [docs/DESIGN.md](docs/DESIGN.md) | the blend gate, the three mechanisms, why sided rather than area |
+| [docs/DESIGN.md](docs/DESIGN.md) | the blend gate, the three mechanisms, why sided rather than area, the painted area and its migration, the trims |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | build, dev loop, file map |
 | [docs/TESTING.md](docs/TESTING.md) | the harness, and what it deliberately does not cover |
 
@@ -19,7 +19,16 @@ dotnet build Source/NeatEdges/NeatEdges.csproj -c Release
 ```
 
 `xmllint --noout` on every changed def. Textures are **generated, never
-hand-edited** — edit `devtools/make_edge_art.py` and re-run it.
+hand-edited** — edit the generator and re-run it: `devtools/make_edge_art.py`
+for the marker ghost and the area tools, `devtools/make_trim_art.py` for the
+trims. After any trim art change, run `devtools/check_trims.py`: no trim is
+ever seen alone, and the sheet composes runs the way the engine draws them.
+
+After any change under `Defs/`, run the constellation's hash gate against the
+last committed version (`hash-preflight.py mod <this mod> --previous <a
+checkout of it>`): a new or renamed def, and the Blueprint and Frame names the
+engine generates from a buildable one, can push a def that saves store by slot
+number, which silently breaks existing saves.
 
 ```bash
 python3 devtools/check-invariants.py
@@ -171,14 +180,33 @@ tool cannot reach.
 **`NE_` prefixes defNames; textures live under `Textures/NeatEdges/`.** Both
 namespaces are global across every loaded mod.
 
-**No floors, no terrain, no art beyond the marker's ghost and the two tool icons.**
-This mod works with anyone's flooring; shipping its own would put it in
-competition with the mods it exists to serve.
+**No floors, no terrain.** This mod works with anyone's flooring; shipping its
+own would put it in competition with the mods it exists to serve. Its art is
+the marker's ghost, the two tool icons and the three trims, all generated and
+all greyscale, so the trims take their stuff's colour and paint like any
+building.
+
+**The trims' `edges` are measured from their art.** Rotation names the edge the
+band hugs, with the offsets in the defs (border `[0]`, corner `[0,1]`, runner
+`[0,2]`); the harness pins every rotation (`trims.masks.*`). Change the art and
+both must be re-measured, or a trim hardens an edge it does not cover.
+
+**The runner's west facing is authored, not mirrored.** The engine's
+auto-mirror would flip the absolute lighting across both rails. Deleting
+`FloorBorderDouble_west.png` brings the bug back silently; `check_trims.py`
+fails if it goes missing while the art still needs it.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this
-mod knowing it exists. Fine Establishments' borders do exactly that, behind
-`MayRequire` so they stay inert for players without this installed.
+mod knowing it exists, behind `MayRequire` so it stays inert for players
+without this installed. The trims began that way, in Fine Establishments,
+before they moved here.
+
+**Compatibility shims are for published mods only.** The adoption of
+Perspective: Paths' saved area is a shim because that mod is published. The
+trims were renamed from Fine Establishments' prefix when they moved, and that
+unpublished mod's saves were patched once by a script in its own devtools
+rather than taught to this one.
 
 **Every Harmony patch fails closed to vanilla.**
 
@@ -196,7 +224,7 @@ category. So if the XML names a real category, dragging is not the def's fault.
 **Perfect Placement** (`remi.perfectplacement`) rebinds hold-left-mouse to
 rotate the ghost — "hold left mouse to pin an object, then move the mouse to
 rotate", by design. That consumes the drag, so drag-placement disappears for
-every rotatable building, ours and Fine Establishments' floor borders alike. It
+every rotatable building, the markers and the floor borders alike. It
 has a setting to turn the mouse-hold rotation off (confirmed 2026-09-04).
 
 The diagnostic lesson is worth more than the fact. The symptom was reported as

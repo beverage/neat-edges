@@ -65,6 +65,8 @@ first time.
 | `mask.twoSided` | the cell *across* the edge hardens too |
 | `mask.cornerSeal` | the neighbour gets its shared corner and nothing else |
 | `mask.stacking.fourIsEight` | four stacked singles harden all 8 directions |
+| `trims.defs.*` | each trim loads stuffable and paintable, carrying the extension; without it a trim is decoration, and nothing in game says so |
+| `trims.masks.*` | each trim hardens exactly the edges its art covers, at all four rotations. The expected edges are written out by hand from the textures rather than computed by the production formula, so a wrong offset in the defs or the formula fails instead of agreeing with itself |
 | `area.lazy` | a map nobody painted carries no area; runs before anything paints |
 | `area.designators.*` | both tools are on the Floors tab, with icons that loaded |
 | `area.equalsFourEdges` | the 5×5 of masks around a painted tile equals the 5×5 around four stacked single-edge markers, cell by cell |
@@ -105,11 +107,12 @@ screenshot. Use the compare toggle (debug menu → Neat Edges → Toggle hard ed
 to shoot both states from one camera position; it suppresses the rendering while
 leaving the overlay showing where every marker is.
 
-**An offline contact sheet**, of the kind Fine Establishments uses for its art.
-Our output is vanilla's nine-vertex fan mesh, not our own textures, so drawing
-it offline would mean reimplementing `Regenerate` — and the sheet would then
-certify the model rather than the game. That is the trap of approximating engine
-maths and then trusting the approximation.
+**An offline contact sheet of the hardening.** The trims' art has one,
+`check_trims.py`, because those are our own textures. The hardening is not: its
+output is vanilla's nine-vertex fan mesh, so drawing it offline would mean
+reimplementing `Regenerate`, and the sheet would then certify the model rather
+than the game. That is the trap of approximating engine maths and then
+trusting the approximation.
 
 **The IL anchors being semantically right.** The harness asserts the transpiler
 *applied* and prints what it resolved, which would have made the wrong-store bug
