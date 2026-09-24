@@ -10,10 +10,16 @@ namespace NeatEdges
     /// the Areas draw style, so a drag paints a filled rectangle, and the area
     /// overlay while the tool is held.
     ///
-    /// Registered in Architect → Floors by Patches/NeatEdges_Designators.xml,
-    /// beside the marker rather than on the Zone tab with vanilla's areas. The
-    /// marker and the area are one feature with two interfaces, and a player
-    /// who finds one should find the other next to it.
+    /// Registered in Architect → Zone by Patches/NeatEdges_Designators.xml,
+    /// with vanilla's areas, where Perspective: Paths keeps its own tools. A
+    /// player switching over finds these where the old ones were. They sat on
+    /// the Floors tab beside the marker at first, and moved for the switch.
+    /// Neither sets an Order: no vanilla tool on the Zone tab does, so the
+    /// grid's stable sort keeps list order and these follow vanilla's areas.
+    ///
+    /// Both step aside while Perspective: Paths is installed, whose zone does
+    /// whole-tile painting then (<see cref="PerspectivePathsInterop"/>). The
+    /// marker does not: its zone has nothing like a one-sided edge.
     /// </summary>
     public abstract class Designator_AreaHardEdges : Designator_Cells
     {
@@ -23,6 +29,12 @@ namespace NeatEdges
 
         public override DrawStyleCategoryDef DrawStyleCategory => DrawStyleCategoryDefOf.Areas;
 
+        /// <summary>
+        /// Hidden while Perspective: Paths is installed. The architect grid
+        /// skips any gizmo that is not visible.
+        /// </summary>
+        public override bool Visible => !PerspectivePathsInterop.Installed;
+
         public Designator_AreaHardEdges(DesignateMode mode)
         {
             this.mode = mode;
@@ -31,6 +43,9 @@ namespace NeatEdges
 
         public override AcceptanceReport CanDesignateCell(IntVec3 c)
         {
+            // Hidden is not enough on its own: architect search activates the
+            // only tool matching a query whether or not that tool is visible.
+            if (PerspectivePathsInterop.Installed) return false;
             if (!c.InBounds(Map)) return false;
 
             Area_HardEdges area = Area_HardEdges.On(Map);
@@ -58,12 +73,6 @@ namespace NeatEdges
         }
     }
 
-    /// <summary>
-    /// `Order` places both tools straight after the marker (uiOrder 2080).
-    /// Special designators default to 0 and sort to the front of the tab,
-    /// among Cancel and Remove floor, where nobody looking at the marker would
-    /// see them.
-    /// </summary>
     public class Designator_AreaHardEdgesExpand : Designator_AreaHardEdges
     {
         public Designator_AreaHardEdgesExpand() : base(DesignateMode.Add)
@@ -74,7 +83,6 @@ namespace NeatEdges
             soundDragSustain = SoundDefOf.Designate_DragAreaAdd;
             soundDragChanged = SoundDefOf.Designate_DragZone_Changed;
             soundSucceeded = SoundDefOf.Designate_ZoneAdd;
-            Order = 2082f;
         }
     }
 
@@ -88,7 +96,6 @@ namespace NeatEdges
             soundDragSustain = SoundDefOf.Designate_DragAreaDelete;
             soundDragChanged = null;
             soundSucceeded = SoundDefOf.Designate_ZoneDelete;
-            Order = 2083f;
         }
     }
 }

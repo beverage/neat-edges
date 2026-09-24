@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Patch>
 
-  <!-- The painted area's paint and clear tools, on the Floors tab with the
-       markers rather than the Zone tab with vanilla's areas: one feature, two
-       interfaces, found in one place. Each designator sets its own Order so it
-       sorts beside the marker instead of among Cancel and Remove floor.
+  <!-- The painted area's paint and clear tools, on the Zone tab with vanilla's
+       areas, which is also where Perspective: Paths puts its own: a player
+       switching over finds the tools where they were. Neither sets an Order.
+       No vanilla tool on that tab does, so the grid's stable sort keeps list
+       order and these land after vanilla's areas, as its tools did.
 
        Appends <li> entries to an existing list. It adds no container node, so
        it cannot collide with another mod doing the same. -->
   <Operation Class="PatchOperationAdd">
-    <xpath>Defs/DesignationCategoryDef[defName="Floors"]/specialDesignatorClasses</xpath>
+    <xpath>Defs/DesignationCategoryDef[defName="Zone"]/specialDesignatorClasses</xpath>
     <value>
       <li>NeatEdges.Designator_AreaHardEdgesExpand</li>
       <li>NeatEdges.Designator_AreaHardEdgesClear</li>

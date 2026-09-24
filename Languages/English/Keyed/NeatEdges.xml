@@ -14,6 +14,9 @@
   <NeatEdges.OverlayToggle>Show hard edges: every tile with a hard edge marker on it, and the painted hard edge area.</NeatEdges.OverlayToggle>
 
   <!-- Shown once, after loading a save whose areas came from Perspective: Paths -->
-  <NeatEdges.AdoptedAreas>Neat Edges took over the hard-edged areas you painted with Perspective: Paths. Paint or clear them from the Floors tab of the Architect menu.</NeatEdges.AdoptedAreas>
+  <NeatEdges.AdoptedAreas>Neat Edges took over the hard-edged areas you painted with Perspective: Paths. Paint or clear them from the Zone tab of the Architect menu, where its tools were.</NeatEdges.AdoptedAreas>
+
+  <!-- Shown once, after loading a save with a Neat Edges area while Perspective: Paths is installed -->
+  <NeatEdges.HandedBackAreas>Perspective: Paths is installed, so it took over the hard edge area you painted with Neat Edges. Paint or clear it from the Zone tab of the Architect menu.</NeatEdges.HandedBackAreas>
 
 </LanguageData>

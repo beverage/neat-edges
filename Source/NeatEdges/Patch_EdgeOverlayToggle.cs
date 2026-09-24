@@ -27,14 +27,30 @@ namespace NeatEdges
     [StaticConstructorOnStartup]   // static Texture2D: silences the startup check's "probably needs"
     public static class Patch_EdgeOverlayToggle
     {
-        // TODO(art): placeholder. Vanilla's remove-bridge glyph is the only
-        // stock icon that reads as "foundation"; a purpose-made one should
-        // land before release.
+        // Our own icon: the ring the area tools use, drawn in vanilla's toggle
+        // style so it sits in that row like the rest (devtools/make_edge_art.py).
+        //
+        // Resolved once, hit or miss. A missing texture logs an error, and
+        // asking again every frame would log it every frame. The fallback is
+        // vanilla's remove-bridge glyph, which stood in here before, because a
+        // toggle that vanished would leave the markers impossible to find.
         internal static Texture2D icon;
+        internal static bool iconResolved;
 
-        internal static Texture2D Icon => icon
-            ?? (icon = ContentFinder<Texture2D>.Get(
-                "UI/Designators/RemoveBridge", reportFailure: false));
+        internal static Texture2D Icon
+        {
+            get
+            {
+                if (!iconResolved)
+                {
+                    icon = ContentFinder<Texture2D>.Get("NeatEdges/OverlayToggle")
+                        ?? ContentFinder<Texture2D>.Get(
+                            "UI/Designators/RemoveBridge", reportFailure: false);
+                    iconResolved = true;
+                }
+                return icon;
+            }
+        }
 
         public static void Postfix(WidgetRow row, bool worldView)
         {

@@ -24,7 +24,7 @@
 
 RimWorld fades every terrain one tile into whatever it touches, and the receiving tile gets no say in it. That is why a clean stone terrace meeting open ground always looks like it is dissolving at the rim. Bridges are the one thing in the game that escape it, and only because they are bridges.
 
-Neat Edges gives you that clean line anywhere, from the Floors tab of the Architect menu.
+Neat Edges gives you that clean line anywhere, from the Floors and Zone tabs of the Architect menu.
 
 · Hard edge: an invisible marker. Pick a side by rotating, and stack them on one tile for any combination.
 · Hard edge area: whole tiles, every edge at once, painted by dragging the way you paint a home area. Free and instant, and nothing is drawn on the map.
@@ -33,7 +33,7 @@ Neat Edges gives you that clean line anywhere, from the Floors tab of the Archit
 · The marker costs no materials, since it changes how an edge draws and nothing else.
 · An overlay toggle on the bottom-right row shows every marker and the painted area, because an invisible thing you cannot find is an invisible thing you cannot remove.
 
-Coming from Perspective: Paths? Remove it and load your save: the areas you painted with it load as the hard edge area. The painted area follows Owlchemist's Perspective: Paths, which solved the whole-tile case first.
+Using Perspective: Paths? While it is installed, Neat Edges leaves whole-tile painting to it and hides its own area tools, and the marker and the trims work alongside it. Remove it and load your save, and the areas you painted with it load as the hard edge area. The painted area follows Owlchemist's Perspective: Paths, which solved the whole-tile case first.
 
 You can add it to a running save. Removing it drops the markers, the trims and the painted area, with an error logged for each missing type on the next load; your floors and terrain are untouched.
 

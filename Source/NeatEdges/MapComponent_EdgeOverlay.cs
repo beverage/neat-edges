@@ -73,10 +73,14 @@ namespace NeatEdges
             base.FinalizeInit();
 
             // Load-time housekeeping for the painted area, here because this is
-            // the one hook that runs per map once every area has loaded. Both are
-            // idempotent, so running again on a later FinalizeInit is harmless.
+            // the one hook that runs per map once every area has loaded. All of
+            // it is idempotent, so running again on a later FinalizeInit is
+            // harmless. The merge goes first, so a hand-back to Perspective:
+            // Paths has at most one area to move.
             Area_HardEdges.MergeDuplicates(map);
             Patch_AreaMigration.AnnounceAdopted();
+            PerspectivePathsInterop.HandBack(map);
+            PerspectivePathsInterop.AnnounceHandedBack();
 
             // The drawer caches its mesh until told otherwise, so an edge placed
             // or removed while the overlay is up would not show.

@@ -11,15 +11,16 @@ Neat Edges gives you that clean line anywhere.
 
 ## What you get
 
-Everything is on the **Floors** tab of the Architect menu:
+All of it is in the Architect menu:
 
-- **Hard edge** hardens one edge of a tile. Rotate it to pick the edge, and
-  stack several on one tile for any combination.
-- **Expand hard edge area** and **Clear hard edge area** do whole tiles, every
-  edge at once, painted by dragging the way you paint a home area. Painting is
-  free and instant, with no build order and no pawn involved.
-- **Floor border**, **floor border corner** and **floor runner border** are
-  visible trim: strips set into the floor along one edge, around a corner, or
+- **Hard edge**, on the **Floors** tab, hardens one edge of a tile. Rotate it to
+  pick the edge, and stack several on one tile for any combination.
+- **Expand hard edge area** and **Clear hard edge area**, on the **Zone** tab
+  beside the home area, do whole tiles, every edge at once, painted by dragging
+  the way you paint a home area. Painting is free and instant, with no build
+  order and no pawn involved.
+- **Floor border**, **floor border corner** and **floor runner border**, on the
+  **Floors** tab, are visible trim: strips set into the floor along one edge, around a corner, or
   down both sides of a corridor. Built from wood, stone or metal, they take
   paint, and each hardens the edges it covers.
 
@@ -40,12 +41,18 @@ building.
 area. An invisible thing you cannot find is an invisible thing you cannot
 remove.
 
-## Coming from Perspective: Paths
+## With Perspective: Paths
 
-Remove it and load your save. The areas you painted with it load as Neat Edges'
-hard edge area, and a message confirms it once the game is up. Both mods can
-stay installed while you switch: Perspective: Paths' own areas keep working
-until you remove it.
+**Using both?** While Perspective: Paths is installed, Neat Edges leaves
+whole-tile painting to it. The two hard edge area tools are hidden, and its own
+tool on the Zone tab does that job. The marker and the trims work alongside it,
+because they harden one side of an edge, which its areas cannot. If a map
+already has a Neat Edges hard edge area, it moves into Perspective: Paths' area
+when the save loads, and a message says so.
+
+**Switching over?** Remove it and load your save. The areas you painted with it
+load as Neat Edges' hard edge area, and a message confirms it once the game is
+up. The tools are on the Zone tab, where its were.
 
 One visible difference: Perspective: Paths stopped terrain fading into a painted
 tile, but still let the painted tile's own terrain fade out onto unpainted

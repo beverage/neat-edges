@@ -4,6 +4,7 @@
 devtools/run-harness.sh              # alongside whatever is already running
 devtools/run-harness.sh --full       # your own mod list, copied
 devtools/run-harness.sh --exclusive  # refuse if any RimWorld is up
+devtools/run-harness.sh --with owlchemist.perspectivepaths  # plus one mod
 ```
 
 Builds Release with the harness compiled in (`-p:Harness=true`), launches an
@@ -68,7 +69,8 @@ first time.
 | `trims.defs.*` | each trim loads stuffable and paintable, carrying the extension; without it a trim is decoration, and nothing in game says so |
 | `trims.masks.*` | each trim hardens exactly the edges its art covers, at all four rotations. The expected edges are written out by hand from the textures rather than computed by the production formula, so a wrong offset in the defs or the formula fails instead of agreeing with itself |
 | `area.lazy` | a map nobody painted carries no area; runs before anything paints |
-| `area.designators.*` | both tools are on the Floors tab, with icons that loaded |
+| `area.designators.*` | both tools are on the Zone tab, with icons that loaded |
+| `overlay.icon` | the overlay toggle shows our icon at 48 px, not the vanilla glyph it falls back to when ours is missing |
 | `area.equalsFourEdges` | the 5×5 of masks around a painted tile equals the 5×5 around four stacked single-edge markers, cell by cell |
 | `area.tools.refuseEachOther` | paint refuses painted tiles, clear refuses unpainted ones |
 | `area.clearRestores` | clearing puts all 25 masks back to zero |
@@ -81,6 +83,12 @@ first time.
 | `migration.hardensOnMap` | an adopted tile hardens all eight directions |
 | `migration.savesAsOurs` | an adopted area saves back under this mod's class, with the legacy name gone from the file |
 | `migration.roundTrips` | and loads again with the same ID and every tile |
+| `migration.standsDownWhileInstalled` | with Perspective: Paths loaded, the lookup answers with its class and nothing counts as adopted |
+| `yield.toolsShownWithoutPerspectivePaths` | without it, both area tools show and paint |
+| `yield.toolsHiddenWithPerspectivePaths` | with it, both are hidden and refuse every cell; the two runs are each other's control |
+| `yield.markerStays` | the marker's build tool shows in both runs |
+| `yield.handBackIntoItsZone` | with it, our area moves into the zone it made when the map finalized: every tile arrives, ours is gone, and our model stops hardening those tiles |
+| `yield.handBackMakesItsZone` | the same when it has no zone yet: one is made through its own constructor, and it is the one its lookup by label finds |
 
 Each case clears its fixtures first, painted areas included. With two-sided
 hardening and corner sealing, a stray marker reaches beyond its own cell, so
@@ -96,9 +104,19 @@ with -1.
 The count is saved beside the grid and read back verbatim, so it would pass on a
 payload that failed to decode.
 
-Both migration cases **skip** when Perspective: Paths is loaded, as it can be
-under `--full`: its own class then resolves first and the migration is inert by
-design.
+**Perspective: Paths takes two runs.** The migration can only be tested without
+it and the hand-back only with it, so the default run skips `yield.handBack`,
+and a run with it skips the migration's load cases and asserts
+`migration.standsDownWhileInstalled` instead:
+
+```bash
+devtools/run-harness.sh
+devtools/run-harness.sh --with owlchemist.perspectivepaths
+```
+
+`--with` adds a mod to the minimal list. Its Workshop copy has to be
+subscribed, with Steam running, for the game to find it. `--full` covers the
+same ground when your own list has it.
 
 ## What it deliberately does not cover
 
@@ -141,8 +159,18 @@ allowed and roof areas lost with it. On that mod list it then broke two other
 mods' map components that read the area manager, and every thing on the map
 threw while spawning until RimWorld stopped logging.
 
-To repeat it by hand instead, on a save with areas painted with Perspective:
-Paths:
+**The hand-back went through a real load too** (2026-09-24), because the order
+inside map finalization only exists there: merge, then our hand-back, then
+Perspective: Paths' own postfix looking its zone up by label. A quick-test
+colony's autosave, with one of our areas injected (the harness fixture's 851
+tiles), was loaded with Perspective: Paths added. The log carried
+`[NeatEdges] moved 1 hard-edge area(s) into Perspective: Paths' zone` and no
+errors. The next autosave held no area of ours and exactly one of its zones,
+with all 851 tiles: made through its constructor, then adopted by its own
+lookup rather than joined by a second, empty one.
+
+To repeat the migration by hand instead, on a save with areas painted with
+Perspective: Paths:
 
 1. Load it with Perspective: Paths still installed, and save.
 2. Remove Perspective: Paths from the mod list and restart.
@@ -151,7 +179,7 @@ Paths:
      `Could not find class PerspectivePaths`;
    - the message about the areas appears once, after the load;
    - the overlay toggle shows the old painted tiles, and they render hardened;
-   - the Floors tab's clear tool removes them.
+   - the Zone tab's clear tool removes them.
 
 Perspective: Paths exists as two Workshop items, the original and a
 continuation, and both write the same class name. The harness fixture came from
@@ -167,3 +195,8 @@ composition failure, and is what happened when this was a prefix returning
 false. There is no automated case for it yet — checking a painted floor still
 has its colour after a `--full` run is the manual step, and it belongs in the
 harness.
+
+**Perspective: Paths** transpiles the same method and always applies first
+(DESIGN §8). The transpiler report shows it: with it loaded, the vert anchor
+reads five higher than without (496 against 491 on the minimal list), which is
+its insertion.

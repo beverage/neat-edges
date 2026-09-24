@@ -98,13 +98,34 @@ python3 devtools/make_trim_art.py
 python3 devtools/check_trims.py
 ```
 
-`make_edge_art.py` draws the marker and the area tools. `EdgeOne` is only ever
-the marker's placement ghost and build-menu icon —
+`make_edge_art.py` draws the marker, the area tools and the overlay toggle's
+icon. The toggle icon is pixel art on vanilla's 24 px toggle grid, in the values
+sampled from that row at 1:1: flat grey 124, a pure-black 1 px outline, 121 on
+the shape's right and bottom edges, 2 px of margin, no anti-aliasing. It is
+written at 2x so it stays sharp at larger UI scales. Edit the `FRAME` grid, not
+the PNG, and resample the game before changing the palette.
+
+`EdgeOne` is only ever the marker's placement ghost and build-menu icon —
 nothing is drawn on the map. That is not optional decoration: a fully
 transparent texture was tried first and made the marker unplaceable, because
 the ghost, the rotation preview and the selected thing all draw from the same
-graphic. `AreaExpand` and `AreaClear` are the paint and clear tools' icons: a
-ring (a tile hard on every side) with a plus or a minus.
+graphic.
+
+`AreaExpand` and `AreaClear` are the paint and clear tools' icons, drawn to sit
+with vanilla's area tools on the Zone tab. Those are flat colour with a 2 px
+black outline, and every clear tool is its expand tool under one shared slash.
+The picture follows Perspective: Paths' own area icon, laid out as that one
+measures but drawn fresh: a soft square behind at upper left and a crisp square
+in front at lower right. Ours is in two colours, sandy soil behind and cut stone
+in front, each with an interior trim just inside its outline, which is the
+mod's own theme. It avoids the area's cyan, which is the home area's colour in
+those menus, and it is warmer than vanilla's cool shrink-zones grey. The soft
+square is drawn with its outline and trim and then blurred as one layer. The
+clear tool is the same picture under vanilla's slash, replicated from
+measurements: red (152, 27, 32) with a 2 px black outline, 37.1 degrees from
+lower left to upper right, about 9 px thick, vertically cut ends, running x 7
+to 54 on a 64 px icon. Both are written at 2x, and supersampled so the slash's
+diagonal edges come out smooth.
 
 `EdgeOne.png` puts its band in the **north** margin, and `Graphic_Single`
 rotation spins it, which is what makes `Rotation` name the hugged edge with no
@@ -145,6 +166,7 @@ if a texture refuses to update.
 | `Area_HardEdges.cs` | the painted area: its `Set` repaint, get-or-create, and the duplicate merge |
 | `Designator_AreaHardEdges.cs` | its paint and clear tools |
 | `Patch_AreaMigration.cs` | loads Perspective: Paths' saved areas as ours, and announces it once |
+| `PerspectivePathsInterop.cs` | the other direction, while it is installed: hides the area tools and moves our area into its zone |
 | `MapComponent_EdgeOverlay.cs` | the overlay drawer, and the area's load-time housekeeping |
 | `Patch_EdgeOverlayToggle.cs` | puts it on the bottom-right toggle row |
 | `DebugTools_NeatEdges.cs` | the compare toggle |
@@ -153,7 +175,7 @@ if a texture refuses to update.
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
-`Patches/NeatEdges_Designators.xml` puts the two area tools on the Floors tab,
+`Patches/NeatEdges_Designators.xml` puts the two area tools on the Zone tab,
 and `Languages/English/Keyed/NeatEdges.xml` holds every string the C# shows a
 player. `devtools/` holds the art generators and the trims' sheet (see
 Textures), the two static checks and the harness runner.

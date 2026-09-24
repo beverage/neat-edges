@@ -26,8 +26,9 @@ namespace NeatEdges
     /// the current environment exactly.
     ///
     /// It acts only on a null result. With Perspective: Paths still installed
-    /// its own class resolves first and nothing here fires, so the two mods can
-    /// run side by side while a player switches over.
+    /// its own class resolves first and nothing here fires. That direction,
+    /// both mods installed, is <see cref="PerspectivePathsInterop"/>'s: this
+    /// mod leaves whole-tile painting to its zone then.
     ///
     /// Rejected: declaring a `PerspectivePaths.Area_InvertEdges` of our own, the
     /// usual continued-mod trick. It squats another author's namespace, and it
@@ -49,7 +50,7 @@ namespace NeatEdges
         /// </summary>
         internal static readonly Dictionary<string, Type> Adopted = new Dictionary<string, Type>
         {
-            { "PerspectivePaths.Area_InvertEdges", typeof(Area_HardEdges) },
+            { PerspectivePathsInterop.AreaClass, typeof(Area_HardEdges) },
         };
 
         /// <summary>
@@ -69,10 +70,10 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// Tells the player once, after the load, that the areas came across and
-        /// where the tools are now. A player switching mods is looking for the
-        /// old tool on the Zone tab, and without this the only evidence the
-        /// migration ran is that nothing broke.
+        /// Tells the player once, after the load, that the areas came across.
+        /// The tools are on the Zone tab, where Perspective: Paths kept its
+        /// own, but without this the only evidence the migration ran is that
+        /// nothing broke.
         ///
         /// Deferred, because map finalization can run inside the loading event,
         /// and a message plays a sound.

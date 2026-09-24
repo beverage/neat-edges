@@ -249,10 +249,12 @@ sets of tiles (§8).
 every map would be one more node in every save, and a load error on every map
 of a player who later removes the mod, including maps where they never used it.
 
-The tools sit on the **Floors** tab beside the marker rather than the Zone tab
-with vanilla's areas. Special designators sort to the front of a tab by default,
-among Cancel and Remove floor; each tool sets its `Order` to 2082 or 2083 so it
-lands straight after the marker (uiOrder 2080).
+The tools sit on the **Zone** tab with vanilla's areas, which is also where
+Perspective: Paths keeps its own, so a player switching over finds them where
+the old ones were. They began on the Floors tab beside the marker, as one
+feature with two interfaces; the move is for the switch. Neither sets an
+`Order`. No vanilla tool on the Zone tab does, so the grid's stable sort keeps
+list order and these land after vanilla's areas, where its tools sat.
 
 ## 8. Taking over Perspective: Paths saves
 
@@ -278,8 +280,8 @@ is the entire mechanism. `ScribeExtractor.SaveableFromNode` sends *every*
 deep-saved object's class name through that method, not only the missing ones,
 and the method ends in a plain type lookup; a postfix sees the final answer on
 every branch. It acts only when that answer is null, so while Perspective: Paths
-is installed its own class resolves first and nothing here fires. The two can
-run side by side through a switch-over.
+is installed its own class resolves first and nothing here fires. What happens
+then is the last part of this section.
 
 Called once per deep-saved object on every load, so the null check comes first.
 
@@ -300,13 +302,47 @@ Two loose ends, both handled at map finalization:
   first one found, so the second would keep hardening tiles the clear tool
   could not reach. They are merged, through the indexer so the pathfinder and
   the terrain mesh hear about every tile.
-- **The player is told once**, after the load, because a player switching mods
-  is looking for the old tool on the Zone tab.
+- **The player is told once**, after the load. The tools are on the Zone tab,
+  where Perspective: Paths kept its own, but without the message the only
+  evidence the migration ran is that nothing broke.
 
 **The visible difference is disclosed, not hidden.** An adopted tile is a
 painted tile, so it also stops fading out onto its neighbours and its region's
 corners close (§7). Edges around adopted areas come out a little crisper than
 Perspective: Paths drew them.
+
+### When both are installed
+
+**The two patches compose in either load order.** Perspective: Paths also
+transpiles `Regenerate`, and its transpiler always runs before ours: its
+designator reads a static field when the game builds the Architect menu during
+def resolution, which runs its static constructor, and its `PatchAll` with it,
+before any mod's startup constructors. Our anchors still resolve, with the vert
+anchor exactly five instructions later, which is its insertion. That was
+measured in both orders on a minimal list, and on a 234-mod list with Dub's
+Paint Shop's edit in place as well.
+
+**Left alone, a player would get two whole-tile tools**, one on each tab,
+drawing by different rules. This mod yields instead. A player who has
+Perspective: Paths installed chose it for exactly this job, so while its class
+resolves:
+
+- **our two area tools are hidden**, and refuse every cell, because architect
+  search activates a hidden tool when it is the only match;
+- **an area of ours already on a map moves into its zone** when the map
+  finalizes, and ours is removed. That covers a player who painted here before
+  adding it, and the round trip this mod creates: remove it, its zones become
+  ours, add it back. Its zone is found by type, or made through its own
+  constructor and label. That label is what its finalization postfix looks up
+  next, so it caches the zone made here instead of adding an empty one. If that
+  constructor ever changes, our area stays where it is and keeps drawing;
+- **the marker, the trims and the overlay stay.** Its zone cannot say "crisp on
+  this side only", and without the overlay nobody can find a marker.
+
+With the migration above, whichever mod is installed owns the painted tiles,
+and Perspective: Paths owns them when both are. No tile is lost in either
+direction. What changes is the rule they draw by: its zone stops terrain fading
+into a tile, but not out of it.
 
 The clean-room line is deliberate. Perspective: Paths carries no licence, on
 its files, its Workshop pages or its repository, so nothing here is taken from

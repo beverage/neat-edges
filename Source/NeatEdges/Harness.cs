@@ -144,6 +144,7 @@ namespace NeatEdges
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("area.designators", CaseAreaDesignatorsRegistered);
+            Guard("overlay.icon", CaseOverlayIcon);
             Guard("area.equalsFourEdges", () => CaseAreaEqualsFourEdges(map));
             Guard("area.clear", () => CaseAreaClearRestores(map));
             Guard("area.dirty", () => CaseAreaPaintDirtiesTerrain(map));
@@ -151,6 +152,8 @@ namespace NeatEdges
             Guard("migration.resolves", CaseMigrationResolvesLegacyClass);
             Guard("migration.realNode", () => CaseMigrationLoadsRealNode(map));
             Guard("migration.roundTrip", CaseMigrationRoundTrips);
+            Guard("yield.tools", () => CaseYieldTools(map));
+            Guard("yield.handBack", () => CaseYieldHandBack(map));
 
             Report.AppendLine($"result: {Passed} passed, {Failed} failed, {Skipped} skipped");
             Log.Message(Report.ToString());
@@ -536,28 +539,49 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// Both tools are on the Floors tab, with icons. The patch names the
-        /// classes as strings, so a rename leaves the tab without them and logs
-        /// nothing at all.
+        /// Both tools are on the Zone tab, with icons, and no longer on the
+        /// Floors tab where they began. The patch names the classes as strings,
+        /// so a rename leaves the tab without them and logs nothing at all.
         /// </summary>
         internal static void CaseAreaDesignatorsRegistered()
         {
-            DesignationCategoryDef floors =
-                DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
-            if (floors == null) { Skip("area.designators", "no Floors category"); return; }
+            DesignationCategoryDef zone =
+                DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Zone");
+            if (zone == null) { Skip("area.designators", "no Zone category"); return; }
 
-            Designator expand = floors.AllResolvedDesignators
+            Designator expand = zone.AllResolvedDesignators
                 .FirstOrDefault(d => d is Designator_AreaHardEdgesExpand);
-            Designator clear = floors.AllResolvedDesignators
+            Designator clear = zone.AllResolvedDesignators
                 .FirstOrDefault(d => d is Designator_AreaHardEdgesClear);
 
-            Check(expand != null && clear != null, "area.designators.onFloorsTab",
+            Check(expand != null && clear != null, "area.designators.onZoneTab",
                 $"expand found: {expand != null}, clear found: {clear != null}");
+
+            DesignationCategoryDef floors =
+                DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
+            int onFloors = floors?.AllResolvedDesignators.Count(d => d is Designator_AreaHardEdges) ?? 0;
+            Check(onFloors == 0, "area.designators.offFloorsTab",
+                $"{onFloors} area tool(s) still registered on the Floors tab");
 
             bool iconsLoaded = expand != null && clear != null
                 && expand.icon != null && expand.icon != BaseContent.BadTex
                 && clear.icon != null && clear.icon != BaseContent.BadTex;
             Check(iconsLoaded, "area.designators.icons", "a tool icon did not load");
+        }
+
+        /// <summary>
+        /// The overlay toggle shows OUR icon, at the size it was drawn for. The
+        /// toggle falls back to vanilla's remove-bridge glyph when ours is
+        /// missing, so it never disappears, and that fallback is exactly what
+        /// would hide a missing texture from anyone looking at the game.
+        /// </summary>
+        internal static void CaseOverlayIcon()
+        {
+            Texture2D icon = Patch_EdgeOverlayToggle.Icon;
+            bool ours = icon != null && icon.name == "OverlayToggle";
+            Check(ours && icon.width == 48 && icon.height == 48, "overlay.icon",
+                icon == null ? "no icon at all"
+                    : $"got '{icon.name}' at {icon.width}x{icon.height}");
         }
 
         /// <summary>
@@ -613,9 +637,19 @@ namespace NeatEdges
 
             int stillHard = Neighbourhood(map, c).Count(m => m != 0);
 
-            Check(clearRefusesUnpainted && expandRefusesPainted, "area.tools.refuseEachOther",
-                $"clear refused unpainted: {clearRefusesUnpainted}, "
-                + $"expand refused painted: {expandRefusesPainted}");
+            // With Perspective: Paths installed both tools refuse every cell,
+            // so this would pass without saying anything; yield.tools owns it.
+            if (PerspectivePathsInterop.Installed)
+            {
+                Skip("area.tools.refuseEachOther",
+                    "Perspective: Paths is loaded, so both tools refuse every cell (yield.tools)");
+            }
+            else
+            {
+                Check(clearRefusesUnpainted && expandRefusesPainted, "area.tools.refuseEachOther",
+                    $"clear refused unpainted: {clearRefusesUnpainted}, "
+                    + $"expand refused painted: {expandRefusesPainted}");
+            }
             Check(stillHard == 0, "area.clearRestores",
                 $"{stillHard} of 25 cells still hardened after clearing");
             Clear();
@@ -736,14 +770,22 @@ namespace NeatEdges
         /// null, or every genuinely missing class in a save would load as a
         /// hard-edge area.
         ///
-        /// With Perspective: Paths loaded, its own class wins and the postfix is
-        /// inert by design, so there is nothing to assert.
+        /// With Perspective: Paths loaded, its own class must win and the
+        /// postfix must stand down: the lookup answers with ITS type, and
+        /// nothing counts as adopted.
         /// </summary>
         internal static void CaseMigrationResolvesLegacyClass()
         {
-            if (GenTypes.GetTypeInAnyAssembly(LegacyClass) != null)
+            Type installed = GenTypes.GetTypeInAnyAssembly(LegacyClass);
+            if (installed != null)
             {
-                Skip("migration.resolves", "Perspective: Paths is loaded; its class wins, by design");
+                Patch_AreaMigration.adopted = 0;
+                Type answer = BackCompatibility.GetBackCompatibleType(typeof(Area), LegacyClass, null);
+                int counted = Patch_AreaMigration.adopted;
+                Patch_AreaMigration.adopted = 0;
+
+                Check(answer == installed && counted == 0, "migration.standsDownWhileInstalled",
+                    $"got {answer?.FullName ?? "null"}, adopted {counted}");
                 return;
             }
 
@@ -911,6 +953,129 @@ namespace NeatEdges
             }
 
             return loaded;
+        }
+
+        // ---- yielding to Perspective: Paths ------------------------------
+
+        /// <summary>
+        /// The area tools follow Perspective: Paths: shown and painting
+        /// without it, hidden and refusing every cell with it. The marker's
+        /// build tool stays in both runs, because its zone has nothing like a
+        /// one-sided edge.
+        ///
+        /// Asserted in both runs, so the default run is the control for the
+        /// one with it installed (run-harness.sh --with).
+        /// </summary>
+        internal static void CaseYieldTools(Map map)
+        {
+            DesignationCategoryDef zone =
+                DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Zone");
+            DesignationCategoryDef floors =
+                DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
+            if (zone == null || floors == null)
+            {
+                Skip("yield.tools", "no Zone or no Floors category");
+                return;
+            }
+
+            Clear();
+            IntVec3 c = Origin(map);
+            bool installed = PerspectivePathsInterop.Installed;
+
+            List<Designator> tools = zone.AllResolvedDesignators
+                .Where(d => d is Designator_AreaHardEdges).ToList();
+            int shown = tools.Count(d => d.Visible);
+            bool accepts = new Designator_AreaHardEdgesExpand().CanDesignateCell(c).Accepted;
+            string detail = $"{tools.Count} tools, {shown} shown, expand accepts a cell: {accepts}";
+
+            if (installed)
+            {
+                Check(tools.Count == 2 && shown == 0 && !accepts,
+                    "yield.toolsHiddenWithPerspectivePaths", detail);
+            }
+            else
+            {
+                Check(tools.Count == 2 && shown == 2 && accepts,
+                    "yield.toolsShownWithoutPerspectivePaths", detail);
+            }
+
+            Designator marker = floors.AllResolvedDesignators
+                .FirstOrDefault(d => d is Designator_Build b && b.PlacingDef == Single);
+            Check(marker != null && marker.Visible, "yield.markerStays",
+                marker == null ? "no build tool for the marker on the Floors tab"
+                    : "the marker's build tool is hidden");
+            Clear();
+        }
+
+        /// <summary>
+        /// With Perspective: Paths installed, a hard edge area on the map moves
+        /// into its zone and ours goes: every tile arrives, the zone is the one
+        /// its own lookup by label finds, and our model stops hardening those
+        /// tiles, because its hook does that now.
+        ///
+        /// Twice: into the zone it made when the map finalized, and into one
+        /// this mod has to make, which is the first load after adding it.
+        /// Either way its zone is put back as it was afterwards.
+        /// </summary>
+        internal static void CaseYieldHandBack(Map map)
+        {
+            if (!PerspectivePathsInterop.Installed)
+            {
+                Skip("yield.handBack",
+                    "Perspective: Paths is not loaded; run-harness.sh --with owlchemist.perspectivepaths");
+                return;
+            }
+
+            HandBackOnto(map, "yield.handBackIntoItsZone", intoExisting: true);
+            HandBackOnto(map, "yield.handBackMakesItsZone", intoExisting: false);
+        }
+
+        internal static void HandBackOnto(Map map, string name, bool intoExisting)
+        {
+            Clear();
+            List<Area> areas = map.areaManager.AllAreas;
+            Area original = PerspectivePathsInterop.ZoneOn(map);
+            if (intoExisting && original == null)
+            {
+                Check(false, name, "Perspective: Paths made no zone when the map finalized");
+                return;
+            }
+            if (!intoExisting && original != null) areas.Remove(original);
+
+            IntVec3 o = Origin(map);
+            IntVec3[] cells = { o, o + IntVec3.East, o + IntVec3.North * 2 };
+            Area_HardEdges ours = Area_HardEdges.GetOrCreate(map);
+            foreach (IntVec3 c in cells) ours[c] = true;
+
+            PerspectivePathsInterop.handedBack = 0;
+            int moved = PerspectivePathsInterop.HandBack(map);
+            int counted = PerspectivePathsInterop.handedBack;
+            PerspectivePathsInterop.handedBack = 0;
+
+            Area zone = PerspectivePathsInterop.ZoneOn(map);
+            bool oursGone = Area_HardEdges.On(map) == null;
+            bool arrived = zone != null && cells.All(c => zone[c]);
+            bool foundByLabel = zone != null
+                && map.areaManager.GetLabeled(PerspectivePathsInterop.ZoneLabel) == zone;
+            bool unhardened = cells.All(c => Patch_SidedFadeBlock.EdgeMaskAt(c, map) == 0);
+            bool rightZone = intoExisting ? zone == original : zone != null && zone != original;
+
+            Check(moved == cells.Length && counted == 1 && oursGone && arrived && foundByLabel
+                    && unhardened && rightZone, name,
+                $"moved {moved}, counted {counted}, ours gone: {oursGone}, all arrived: {arrived}, "
+                + $"found by its label: {foundByLabel}, no longer hardened here: {unhardened}, "
+                + (intoExisting ? "used its zone: " : "made a new zone: ") + rightZone);
+
+            if (zone != null)
+            {
+                foreach (IntVec3 c in cells) zone[c] = false;
+            }
+            if (!intoExisting)
+            {
+                if (zone != null) areas.Remove(zone);
+                if (original != null) areas.Add(original);
+            }
+            Clear();
         }
     }
 }

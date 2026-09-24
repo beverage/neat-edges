@@ -166,9 +166,20 @@ so the `Set` override is what makes a painted tile repaint. `Area.Clear()` and
 not player-deletable and so never appears in the manage-areas dialog.
 
 **The migration answers only a null lookup.** While Perspective: Paths is
-installed its class resolves first and the postfix never fires, so both mods
-can run through a switch-over. Never declare a type in another mod's namespace
-to catch its saves: it collides the moment both are loaded.
+installed its class resolves first and the postfix never fires. Never declare a
+type in another mod's namespace to catch its saves: it collides the moment both
+are loaded.
+
+**While Perspective: Paths is installed, whole-tile painting is its job.**
+`PerspectivePathsInterop.Installed` (its area class resolves, the same name the
+migration answers for) hides the two area tools and makes them refuse every
+cell, because architect search activates a hidden tool when it is the only
+match. At map finalization any area of ours moves into its zone, found by type
+or made through its own constructor and label, and ours is removed. So
+whichever mod is installed owns the painted tiles, and it owns them when both
+are. The marker, the trims and the overlay stay: its zone cannot say one side.
+Its patch on `Regenerate` lands before ours in every load order, and our vert
+anchor sits five instructions later for it; see DESIGN §8.
 
 **The area is created on first paint, never with the map**, and a map that
 loads with two is merged down to one at finalization. Everything resolves THE
@@ -182,9 +193,13 @@ namespaces are global across every loaded mod.
 
 **No floors, no terrain.** This mod works with anyone's flooring; shipping its
 own would put it in competition with the mods it exists to serve. Its art is
-the marker's ghost, the two tool icons and the three trims, all generated and
-all greyscale, so the trims take their stuff's colour and paint like any
-building.
+the marker's ghost, the two tool icons, the overlay toggle's icon and the three
+trims, all generated. The ghost and the trims are greyscale, so the trims take
+their stuff's colour and paint like any building. The icons copy the vanilla
+icons they sit among instead (see DEVELOPMENT, Textures): the toggle is pixel
+art matching the toggle row, and the area tools match the Zone tab's area
+tools, vanilla's clear slash included. The tools are stone and soil, never the
+area's cyan: that blue is the home area's in those menus.
 
 **The trims' `edges` are measured from their art.** Rotation names the edge the
 band hugs, with the offsets in the defs (border `[0]`, corner `[0,1]`, runner

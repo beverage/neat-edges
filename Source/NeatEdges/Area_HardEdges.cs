@@ -7,7 +7,7 @@ namespace NeatEdges
 {
     /// <summary>
     /// The painted hard-edge area: whole tiles, drag-painted from Architect →
-    /// Floors, free and instant.
+    /// Zone, free and instant.
     ///
     /// A painted tile is exactly four hardened edges to the mask, as if a
     /// single-edge marker stood on each side — it contributes all four

@@ -115,6 +115,8 @@ FORBIDDEN_TOKENS = [
 #   Area_HardEdges           the painted area, named in every save that has one
 #   Designator_AreaHardEdges*  its two tools, bound from Patches/ by name
 #   Patch_AreaMigration      what loads Perspective: Paths' saved areas as ours
+#   PerspectivePathsInterop  the reverse: hides the area tools and moves our
+#                            area into its zone while it is installed
 #
 # The bound-by-name entries are the reason this list is not belt-and-braces: a
 # missing thingClass or modExtension is a def-load error a player sees as two
@@ -131,6 +133,7 @@ REQUIRED_TYPES = [
     "Designator_AreaHardEdgesExpand",
     "Designator_AreaHardEdgesClear",
     "Patch_AreaMigration",
+    "PerspectivePathsInterop",
 ]
 
 failures = []

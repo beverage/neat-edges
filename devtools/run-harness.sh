@@ -8,6 +8,16 @@
 #   devtools/run-harness.sh              # beside whatever is already running
 #   devtools/run-harness.sh --full       # your own mod list, copied
 #   devtools/run-harness.sh --exclusive  # refuse if any RimWorld is up
+#   devtools/run-harness.sh --with owlchemist.perspectivepaths
+#                                        # the minimal list plus that mod
+#
+# WHY --with EXISTS
+#
+# Some cases need a mod present and others need it absent, so no one list
+# covers both. Perspective: Paths is the case today: the migration of its
+# saved zones can only run without it, and handing our area back to its zone
+# only with it. The default run covers the first; --with covers the second.
+# Repeatable. It adds to the minimal list only; --full already uses yours.
 #
 # WHY ALONGSIDE IS THE DEFAULT HERE
 #
@@ -105,16 +115,27 @@ MINIMAL_MODS=(
 
 FULL=0
 EXCLUSIVE=0
-for arg in "$@"
+WITH=""
+while [ $# -gt 0 ]
 do
-  case "$arg" in
+  case "$1" in
     --full) FULL=1 ;;
     --exclusive) EXCLUSIVE=1 ;;
-    *) printf 'unknown option: %s (--full | --exclusive)\n' "$arg" >&2; exit 2 ;;
+    --with)
+      [ $# -ge 2 ] || { printf 'error: --with needs a packageId\n' >&2; exit 2; }
+      MINIMAL_MODS+=("$2")
+      WITH="$WITH $2"
+      shift
+      ;;
+    *) printf 'unknown option: %s (--full | --exclusive | --with <packageId>)\n' "$1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
+
+[ "$FULL" = "1" ] && [ -n "$WITH" ] \
+  && die "--with adds to the minimal list, and --full uses yours instead; pick one"
 
 # WHAT THE STALL LOOKED LIKE, PRINTED RATHER THAN ASSERTED.
 #
@@ -281,7 +302,8 @@ else
     printf '  </activeMods>\n</ModsConfigData>\n'
   } > "$TESTDATA/Config/ModsConfig.xml"
   xmllint --noout "$TESTDATA/Config/ModsConfig.xml" || die "generated mod list is not well-formed"
-  printf 'mod list: minimal (%s mods, isolated)\n' "${#MINIMAL_MODS[@]}"
+  printf 'mod list: minimal (%s mods, isolated)%s\n' "${#MINIMAL_MODS[@]}" \
+    "${WITH:+, with$WITH}"
 fi
 
 # Windowed and muted. A fresh -savedatafolder has no Prefs.xml, so the instance
