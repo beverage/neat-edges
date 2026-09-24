@@ -18,7 +18,7 @@
 # is the opt-out, and it is the right mode for a final pre-release run where
 # nothing should be competing for the machine.
 #
-# READ THIS BEFORE YOU WALK AWAY: ALONGSIDE IS NOT UNATTENDED.
+# ALONGSIDE USED TO NEED A CLICK ON THE NEW WINDOW. IT NO LONGER DOES.
 #
 # Four sessions went into this and the diagnosis is closed: an unfocused
 # RimWorld window does not composite, and a background instance never gets past
@@ -83,8 +83,9 @@ TIMEOUT=1200
 # marker once reported a healthy run as a stall. A marker has to be verified
 # against the list it will actually run against.
 #
-# Headroom note: a focused run reaches startup in ~60s, so 120 is not much
-# slack if a human takes a moment to find the window.
+# Headroom note: the minimal list reached startup in ~20s with focus held
+# elsewhere (the 2026-09-11 measurement in the Prefs.xml block), so 120 leaves
+# plenty; a big list is what the next paragraph is for.
 #
 # STARTUP_GRACE IS A FLOOR, NOT A DEADLINE. It was an elapsed-only deadline
 # until now, and in that form it shoots healthy runs: a large mod list takes
@@ -137,8 +138,8 @@ stall_evidence() {
   tail -n 5 "$LOG" 2>/dev/null | sed 's/^/         | /'
 }
 
-# --exclusive is the pre-release posture: nothing else competing, and no other
-# window owning the foreground.
+# --exclusive is the pre-release posture: nothing else competing for the
+# machine.
 if pgrep -x "$PROC" >/dev/null && [ "$EXCLUSIVE" = "1" ]
 then
   die "RimWorld is already running and --exclusive was passed.
@@ -324,11 +325,13 @@ xmllint --noout "$TESTDATA/Config/Prefs.xml" || die "generated Prefs.xml is not 
 
 printf 'save data: %s\n' "$TESTDATA"
 
+# A note, not a warning. This was a banner telling you to click the new window
+# or watch the run stall, back when an unfocused instance never loaded; the
+# seeded runInBackground above fixed that, and deploy() leaves the other game's
+# dll alone. Another game can still make the run slower, by competing for CPU.
 if [ "$EXCLUSIVE" = "0" ] && pgrep -x "$PROC" >/dev/null
 then
-  printf '\n  *** ANOTHER RIMWORLD IS RUNNING AND OWNS THE FOREGROUND. ***\n'
-  printf '  *** CLICK THE NEW WINDOW ONCE WHEN IT APPEARS, or this run   ***\n'
-  printf '  *** stalls at the loading screen and is killed in %ss.      ***\n\n' "$STARTUP_GRACE"
+  printf 'another RimWorld is running: this run loads beside it, no click needed\n'
 fi
 
 printf 'launching…\n'
@@ -396,14 +399,15 @@ $evidence
     die "stalled before RimWorld started (log silent ${quiet}s, ${elapsed}s in).
 
        This is NOT a mod-wiring problem: Unity's preamble finished and the game
-       stopped before loading any assembly. The known cause is the window never
-       coming to the front. A near-zero CPU reading below confirms it is blocked
-       rather than slow; a busy one means look elsewhere.
+       stopped before loading any assembly. A near-zero CPU reading below
+       confirms it is blocked rather than slow; a busy one means look elsewhere.
 
 $evidence
-       Bring the new RimWorld window to the front and run again. Running
-       alongside cannot do that for you: the other instance owns the
-       foreground. For an unattended run, quit the others and use --exclusive.
+       This used to mean the window never came to the front, and the seeded
+       runInBackground fixed that: unfocused runs load normally (measured, 3/3
+       each way). So check first that $TESTDATA/Config/Prefs.xml still
+       carries runInBackground True. Bringing the window to the front by hand
+       still gets one run unblocked.
 
        Log: $LOG"
   fi
@@ -420,11 +424,30 @@ printf 'game exited after ~%ss\n\n' "$elapsed"
 
 [ -f "$LOG" ] || die "no log at $LOG — did -logfile take?"
 
-# TWO FAILURES, TWO MESSAGES. A single line here once blamed mod wiring for a
-# stall that happens before any mod loads, and misdirected a whole session.
-grep -q "with mods:" "$LOG" \
-  || die "the game exited without ever reaching RimWorld's own startup — the
-       focus stall, not a wiring problem. See $LOG"
+# THREE FAILURES, THREE MESSAGES, and the crash is checked first. A single line
+# here once blamed mod wiring for a stall that happens before any mod loads, and
+# misdirected a whole session. Then a sibling mod reported a native crash as the
+# stall, because a crash fails the "with mods:" test below as well.
+#
+# By this point the game EXITED by itself. A stall never does; the loop above
+# stops those with their own message. So a missing "with mods:" here is never
+# the stall, and the log's last lines are the evidence for what it was.
+if grep -q "Native Crash Reporting" "$LOG"
+then
+  printf 'the game CRASHED (native). Top frames:\n' >&2
+  grep -E "^#([0-9]|1[0-5]) " "$LOG" | cut -c1-140 >&2 || true
+  printf '\n' >&2
+  die "native crash: neither the stall nor a wiring problem. See $LOG"
+fi
+if ! grep -q "with mods:" "$LOG"
+then
+  printf 'last lines of the log:\n' >&2
+  tail -n 5 "$LOG" | sed 's/^/  | /' >&2
+  die "the game exited before RimWorld's own startup, with no native crash
+       recorded: not the stall, which never ends by itself, and not a wiring
+       problem. Something ended the process; the lines above may say what.
+       See $LOG"
+fi
 grep -q "harness auto-run" "$LOG" \
   || die "the game started but the harness never ran — is -neatedges-harness
        still wired up? See $LOG"
