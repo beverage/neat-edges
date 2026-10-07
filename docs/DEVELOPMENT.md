@@ -132,27 +132,50 @@ rotation spins it, which is what makes `Rotation` name the hugged edge with no
 offset. Change that art and the relationship must be re-measured — the harness
 pins it (`mask.rotation.*`) so an inversion fails loudly.
 
-`make_trim_art.py` draws the three trims: thirteen PNGs under
+`make_trim_art.py` draws the six trims: twenty-four PNGs under
 `Textures/NeatEdges/Trim/`, the facings of each piece plus build-menu icons for
-the border and the runner. The straight border has no west facing because the
-engine's mirror of its east is correct for one rail; the runner's is authored
-(see DESIGN §9). Everything is greyscale, so the stuff tints it and paint
-recolours it. The script came from Fine Establishments with the trims and
-writes the same bytes that mod shipped; `trim_kit.py` is the part of that mod's
-texture kit it needs: the canvas, the house greys and the PNG writer.
+the border, the runner and the inside corner. Every facing that rotates is
+authored: the straight's, the runner's and the end cap's west, because the
+engine's mirror of east would light it from the wrong side, and all four of
+the inside corner's, because it is chiral. The frame is one texture because it
+never rotates (see DESIGN §9). The end cap and the frame are drawn by `_frame`, the
+corner's joining rules generalised to any set of edges. Everything is
+greyscale, so the stuff tints it and paint recolours it. The script came from
+Fine Establishments with the first three trims, and still writes the same bytes
+for them that mod shipped; `trim_kit.py` is the part of that mod's texture kit
+it needs: the canvas, the house greys and the PNG writer.
 
-`check_trims.py` composes the trims into runs on `dist/_trims.png`, with the
-defs' 4% overdraw modelled, because no trim is ever seen alone: a corridor of
-runners, runners meeting straight borders, east beside west, and a run that
-stops. It exits non-zero if the runner's rail drifts off the straight border's,
-or if `FloorBorderDouble_west.png` goes missing while the art still needs it.
-The trims' `edges` are measured from this art, so a change that moves a band
-also means re-measuring them; the harness pins every rotation
-(`trims.masks.*`).
+`check_trims.py` composes the trims on two sheets, at the defs' drawSize
+(exactly one tile), because no trim is ever seen alone. `dist/_trims.png` has the runs:
+a corridor of runners, runners meeting straight borders, east beside west, and
+a run that stops. `dist/_trimshapes.png` has the joins: an inside corner around
+a wall block, a one-wide path capped at both ends, a runner turning a corner
+(a corner and an inside corner stacked on the turning tile), and frames. It
+exits non-zero if the runner's rail drifts off the straight border's, if
+`_frame` stops redrawing any of the twelve shipped straight, corner and runner
+facings pixel for pixel, or if an authored facing goes missing while the art
+still needs it. The sheets cannot show what the game's sampler does at a
+quad's edge; for that, see the joints scene below. The trims' `edges` are measured from this art, so a change
+that moves a band also means re-measuring them; the harness pins every
+rotation (`trims.masks.*`).
 
 A `.dds` beside a PNG silently shadows it with no timestamp check, so a
-regenerated texture can appear not to change. `*.dds` is gitignored; delete one
-if a texture refuses to update.
+regenerated texture can appear not to change. Faster Game Loading writes them
+into the mod folder of any game that runs it, and every other instance that
+loads the mod through the same folder then draws its block-compressed copy.
+`*.dds` is gitignored; the generator deletes the `.dds` beside each PNG it
+writes, and deleting one by hand fixes a texture that refuses to update.
+
+Whether two trims meet cleanly is a question about the game's sampler as much
+as the art, so it is checked in a running game, on a layout with every joint
+the trims make: a corridor crossing of runners with an end cap on each arm and
+an inside corner in each corner, a room edge of straights and corners with an
+arm joining it through two inside corners, open ends, a runner giving way to a
+straight, and frames. Two captures matter: a close zoom near the art's own
+resolution, which shows a one-pixel line for what it is, and the game's
+closest normal zoom, where tile boundaries fall between pixels and a sampling
+seam would shimmer. Paint the trims a light colour for it; unpainted wood on a
+wood floor hides most of what there is to see.
 
 ## File map
 
@@ -172,6 +195,8 @@ if a texture refuses to update.
 | `DebugTools_NeatEdges.cs` | the compare toggle |
 | `Harness.cs` | the regression cases — see [TESTING.md](TESTING.md) |
 | `HarmonyInit.cs` | `PatchAll`, and the startup anchor report |
+| `Patch_TrimAtlas.cs` | keeps the trims' textures out of the static atlas and clamps their edges |
+| `NeatEdgesMod.cs` | the mod class, there only to apply `Patch_TrimAtlas` before any def loads |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),

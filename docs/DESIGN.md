@@ -122,6 +122,49 @@ Pinning happens after the mask loop and forces sealed corner vertices dark
 regardless of what lit them. Cardinals are untouched, so a neighbouring tile
 keeps its own fade — it simply stops wrapping around the corner.
 
+### A pin that holds nothing back is dropped
+
+"Regardless of what lit them" was too broad. `EdgeMaskAt` decides which corners
+a layout seals from the markers alone, and a pin darkens that vertex for every
+fade drawn on the cell — including a fade that never crossed a hardened edge.
+The preview card caught it: lichen and sand meeting under the end of a floor's
+hardened bottom edge. Sand outranks lichen (350 against 315), so its fade lands
+on the lichen tile from the east, across an edge nobody hardened. The floor's
+edge flanks that tile's top corner and the floor's side seam closes it, so the
+corner was pinned, the sand fade was cut off at the top, and the two grounds
+met in a hard line just under the floor. Trims alone did it, and so did the
+painted area alone.
+
+So the renderer consumes `RenderMaskAt`: the layout mask, less every pin that
+holds nothing back. It replays the patched renderer's view of the eight
+neighbours — vanilla's gate for which terrains fade onto the cell, the
+substituted array for which corners each one lights — and drops a pin only when
+every fade reaching that corner:
+
+- comes in through an **open side whose terrain is its own** (a fade that reaches
+  the corner only by the diagonal keeps its pin: that spike is what corner
+  sealing is for);
+- finds **no open side at the corner that is a seam inside the cell's own
+  surface**, where a lit corner beside a neighbour pinned clean would cut the
+  fade off in a straight line (the taper beside a lone edge keeps its pin: its
+  open side there is the same floor). An open side of the fade's own terrain,
+  or of any terrain different from the cell's, is already a boundary, and a lit
+  corner cuts nothing new there;
+- and finds **no hardened edge at the corner holding that same terrain back**
+  (the re-lit corner above, where the hardened edge holds back the soil that
+  re-lights it, keeps its pin).
+
+The replay reads the cardinals substituted and each diagonal as built. The
+renderer substitutes every direction whose bit is in the mask it is handed,
+diagonals included, so dropping a pin also un-substitutes its diagonal; the
+first version read the diagonal substituted, never saw the sand sitting there,
+and let its spike onto a carpet tile beside a painted area.
+
+Anything mixed keeps its pin: a crisp edge wins a tie. `EdgeMaskAt` itself is
+unchanged and stays a pure function of the marker layout, which is what the
+harness's mask cases assert; the render step reads terrain, and its cases paint
+terrain to read.
+
 ### Hardening is two-sided
 
 An edge is shared, so a marker on the north edge of a cell hardens the south
@@ -155,7 +198,7 @@ and our anchors are disjoint from theirs. Both survive in either order.
 
 Three insertions, all direct calls:
 
-1. at the first `TerrainAt(item)` — compute the cell's mask once into a fresh local
+1. at the first `TerrainAt(item)` — compute the cell's render mask once into a fresh local
 2. before the neighbour store — substitute `Underwall` for a hardened direction
 3. at the colour ternary — force sealed corner vertices dark
 
@@ -188,6 +231,11 @@ function that touches the thing grid, per operation:
 
 The overlay's own predicate was later narrowed to "does this cell carry a
 marker", which is one lookup per cell and needs no cache at all.
+
+`RenderMaskAt` adds work only on a cell with a sealed corner, which is a cell
+beside a hardened edge: one pass over the eight neighbours' terrain, built the
+way the renderer builds it, into per-thread scratch arrays. A cell with no
+sealed corner returns the layout mask untouched.
 
 The painted area adds one grid read per own-mask lookup. The area itself is
 found once per regeneration, in the cache's constructor, because finding it is a
@@ -245,9 +293,17 @@ outline.** It would put build orders and things on the map for what is a
 rendering preference, and it cannot load another mod's saved areas, which are
 sets of tiles (§8).
 
-**The area is created on first paint**, not with every map. An empty area on
-every map would be one more node in every save, and a load error on every map
-of a player who later removes the mod, including maps where they never used it.
+**The area is created on first paint**, not with every map, **and removed when
+its last tile is cleared.** A saved area whose class is missing does not cost
+one load error: it takes the map's whole area list with it (§8 has the
+measured case, Perspective: Paths' own). So an empty area on every map would
+cost every map its home and allowed areas for a player who later removes the
+mod, including maps where they never painted, and an area kept after its last
+tile was cleared would do the same to the maps where they did. Clearing every
+painted tile is therefore the player's way to make a map safe to remove this
+mod from, and map finalization drops any area that loads empty, which is what
+an adopted Perspective: Paths zone usually is: that mod adds an empty zone to
+every map.
 
 The tools sit on the **Zone** tab with vanilla's areas, which is also where
 Perspective: Paths keeps its own, so a player switching over finds them where
@@ -261,8 +317,16 @@ list order and these land after vanilla's areas, where its tools sat.
 Perspective: Paths stores its per-tile override as an `Area` subclass,
 `PerspectivePaths.Area_InvertEdges`. Its original and its continued release
 both write that one class name. Its own FAQ tells players to clear their areas
-before removing it, and what happens otherwise is worse than losing one area
-(measured 2026-09-23 on a real colony save). The unresolvable node loads as a
+before removing it, but clearing does not help: a `Map.FinalizeInit` postfix
+adds its zone to every map that lacks one, painted or not, and the zone does
+not override `Mutable`, so Manage Areas never lists it and `AreaManager.Remove`
+refuses it. Every map it was ever loaded on keeps the class in its save, and
+what that does on removal is worse than losing one area (measured 2026-09-23 on
+a real colony save with a painted zone; the empty-zone case tested 2026-10-07
+on a minimal list, where a never-painted zone loaded without the mod left the
+map with no areas, `Map.FinalizeLoading` failed at the first reader of the home
+area, and the game's root update threw every frame after. The same save with
+this mod installed instead loaded clean). The unresolvable node loads as a
 null list element; `AreaManager.UpdateAllAreasLinks` dereferences every element
 while loading, throws on the null, and the map's **whole** area manager fails to
 load. Home, allowed and roof areas all go with it. Anything that reads the area
@@ -294,7 +358,7 @@ load folder, which then owns all of this mod's folder resolution.
 ever moves into another mod, a save carrying `NeatEdges.Area_HardEdges` needs
 exactly the same treatment, and that should be one more row.
 
-Two loose ends, both handled at map finalization:
+Three loose ends, all handled at map finalization:
 
 - **A map can load with two areas** — one adopted, one painted here — if a save
   ever ran with both mods and the player used both tools. `AreaManager` relinks
@@ -302,9 +366,18 @@ Two loose ends, both handled at map finalization:
   first one found, so the second would keep hardening tiles the clear tool
   could not reach. They are merged, through the indexer so the pathfinder and
   the terrain mesh hear about every tile.
-- **The player is told once**, after the load. The tools are on the Zone tab,
-  where Perspective: Paths kept its own, but without the message the only
-  evidence the migration ran is that nothing broke.
+- **An adopted zone is usually empty.** Perspective: Paths adds its zone to
+  every map, painted or not, so a switcher's save carries one per map. Empty
+  ones are dropped (§7: an empty area must never reach a save).
+- **The player is told once**, after the load, and only about areas that had
+  painted tiles. The tools are on the Zone tab, where Perspective: Paths kept
+  its own, but without the message the only evidence the migration ran is that
+  nothing broke. Counting every adoption told a switcher their areas came
+  across on maps they never painted. An adopted area is told apart from one
+  this mod saved, which shares its class, by a runtime mark the type lookup
+  leaves for the constructor the scribe calls next; it is counted before the
+  merge can fold it away, and the message waits for the load to finish so
+  every map is counted.
 
 **The visible difference is disclosed, not hidden.** An adopted tile is a
 painted tile, so it also stops fading out onto its neighbours and its region's
@@ -351,12 +424,13 @@ whole-tile hardening, and the README credits it for that.
 
 ## 9. The visible trims
 
-A border strip, its corner and a double-rail runner: 1×1 non-edifice buildings
-at a floor-covering altitude that dress a cell without owning it, so they
-coexist with any terrain and with furniture. Stuffable and paintable. Each
-carries `BlocksTerrainFade` for the edges its art covers, so a decorated strip
-is also a hard edge, by the same two-sided, corner-sealing rules as the
-invisible marker.
+A border strip, its corner, the inside corner, a double-rail runner, an end cap
+and a frame: 1×1 non-edifice buildings at a floor-covering altitude that dress
+a cell without owning it, so they coexist with any terrain, with furniture and
+with each other. Stuffable and paintable. Each but the inside corner carries
+`BlocksTerrainFade` for the edges its art covers, so a decorated strip is also
+a hard edge, by the same two-sided, corner-sealing rules as the invisible
+marker.
 
 They began in Fine Establishments and moved here on 2026-09-24, because what
 makes a trim more than decoration is this mod's mechanism. The art came with
@@ -373,15 +447,65 @@ published mod and that one was never published.
   chiral (a mirrored east would duplicate the south corner), and owning both
   bands in one image is what lets them join cleanly: two separate strips never
   can, since neither texture knows the other.
-- **The runner authors its own west facing.** The engine mirrors east for a
-  missing west, which flips the absolute lighting across both rails at once:
-  fine for a one-rail strip (a flipped right-edge strip *is* a left-edge
-  strip), wrong for the piece that owns the pair. `check_trims.py` re-derives
-  whether the mirror is still dangerous rather than trusting a comment.
+- **Every facing that rotates is authored.** The engine mirrors east for a
+  missing west, which flips the absolute lighting: the lit lip lands on the
+  shaded side. The runner and the end cap authored their west from the start
+  for that reason. The straight was left to the mirror, on the belief that a
+  flipped right-edge strip *is* a left-edge strip, which is true of its shape
+  and not of its light: once the joints were otherwise clean (2026-10-06), its
+  lip visibly stepped wherever a west straight met a corner or an inside
+  corner, both lit the right way. It authors its west now too.
+  `check_trims.py` requires every authored file, and the harness fails a
+  mirrored west (`trims.atlas.*`).
 - **Two straights at different rotations stack on one cell**, by the same
   rotation-equality rule as the markers (§3). The runner exists for the
   ergonomics, a corridor's two rails in one drag, and so one image owns both
   rails. It costs double, so the convenient route is not also the cheap one.
-- **All three draw at 4% overdraw** (`drawSize 1.04`, square): at shared quad
-  edges the sampler resolves the two edge-texel columns differently as the
-  camera moves, and the overlap kills the shimmer.
+- **All of them draw at exactly one tile, from textures kept out of the static
+  atlas.** RimWorld packs small building textures into a static atlas edge to
+  edge, with no gutter, and builds mipmaps and compresses the sheet as a
+  whole, so the outermost texels of an atlased quad are filtered against
+  whichever texture sits beside it there. Art that stops short of its edges
+  never shows it. A trim's bands run to the edge by design, so every joint
+  carried a hairline of a neighbour's colour, often green or teal, that
+  changed as the camera moved. The trims first hid it with a 4% overdraw
+  (`drawSize 1.04`), which only moved the line 2% onto the neighbouring piece,
+  where it drew on top: a thin line across the band at every joint, worst at
+  the inside corners, whose transparent neighbours darkened it. Since
+  2026-10-06 `Patch_TrimAtlas` keeps the trims' textures out of the atlas and
+  clamps their edges, so a piece's last texel is its own, and a joint is two
+  textures meeting at a tile boundary, which the art makes continuous. It is a
+  prefix on `GlobalTextureAtlasManager.TryInsertStatic`, applied from the mod
+  class's constructor, because every def offers its textures to the atlas
+  before any static constructor runs; Faster Game Loading can defer that until
+  well after startup, and the prefix catches that too. The cost is that a map
+  section draws trims in a batch per texture and colour instead of in the
+  atlas's one. The harness pins all of it (`trims.atlas.*`): not atlased,
+  clamped, one tile, and no mirrored west.
+- **The inside corner fills the notch strips cannot.** A strip runs its own
+  tile's full length, so where a line turns around an inside corner (a wall
+  jutting into the room) the strips on the two tiles beside the corner meet
+  only at a point, and a band's width of square in the tile between them is
+  left open. The inside corner is that square, carrying both strips' keylines,
+  grooves and inner lips on and joining them; its other two sides are joints,
+  so they have no lip. It hardens nothing: it covers a corner, not an edge, and
+  corner sealing already closes that corner from the two strips beside it.
+  Chiral, so four facings, named for the corner as the corner piece's are.
+- **A runner turning a corner is two pieces on one tile**: a corner for the
+  outer rails and an inside corner for the inner joint. Neither is an edifice,
+  so the engine lets them share the tile at every stage: blueprint placement
+  refuses only the same def at the same rotation, and spawning wipes only an
+  edifice with an edifice. The harness pins it (`trims.stack.*`).
+- **The end cap and the frame are drawn by `_frame`**, the corner's joining
+  rules generalised to any set of edges: one fill union, keylines that stop at
+  a crossing band's inner edge, grooves that run into each other and stop,
+  bevels lit by their final side. Two adjacent edges through `_frame` are the
+  corner, pixel for pixel, and so are the straight and the runner; the sheet
+  fails if that ever stops being true, which is what makes a new shape a member
+  of the family rather than a lookalike. The end cap's facing names its closed
+  end; its west is authored for the runner's reason. The frame never rotates,
+  so it is one texture, with `drawRotated false` because `rotatable false`
+  alone does not stop a `Graphic_Single` spinning when code sets a rotation.
+- **Price follows the bands**, the runner's rule: the end cap costs three
+  strips and the frame four, and the inside corner, a band's width square, a
+  fraction of one.

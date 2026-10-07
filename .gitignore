@@ -25,6 +25,13 @@ dist/
 # Python bytecode from the art generators
 __pycache__/
 
+# Generated media: the local Workshop page preview (bbcode-preview.py, several
+# MB with --inline) and the banner pages banner-export.sh renders from. The
+# banners themselves and every capture are tracked.
+media/_bbcode-preview*.html
+media/cards/_export/
+media/build/
+
 # RimWorld's texture cache. The game never writes these itself, but tools on
 # this machine do — and a .dds beside a PNG makes the game ignore the PNG
 # entirely, with no timestamp check. Every texture this mod ships is generated,

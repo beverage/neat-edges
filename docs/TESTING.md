@@ -55,6 +55,11 @@ from marker layout to an 8-bit mask. That is decidable without rendering
 anything, and each of these cost a game restart and a screenshot to find the
 first time.
 
+The one exception lives in `RenderMaskAt`, the mask the renderer consumes: the
+layout mask less any corner pin that holds nothing back (DESIGN §4). It reads
+terrain, so its cases paint terrain as a fixture, and `Clear()` puts the old
+terrain back.
+
 | Case | Pins |
 |---|---|
 | `transpiler.applied` | anchors found — and prints the report, so an ambiguous anchor is visible |
@@ -66,14 +71,26 @@ first time.
 | `mask.twoSided` | the cell *across* the edge hardens too |
 | `mask.cornerSeal` | the neighbour gets its shared corner and nothing else |
 | `mask.stacking.fourIsEight` | four stacked singles harden all 8 directions |
-| `trims.defs.*` | each trim loads stuffable and paintable, carrying the extension; without it a trim is decoration, and nothing in game says so |
-| `trims.masks.*` | each trim hardens exactly the edges its art covers, at all four rotations. The expected edges are written out by hand from the textures rather than computed by the production formula, so a wrong offset in the defs or the formula fails instead of agreeing with itself |
+| `render.junction.layoutSeals` | the premise: under a floor's hardened edge, the layout mask seals the lichen tile's corner where sand meets it |
+| `render.junction.groundCornerLit` | the render mask leaves that corner lit, so sand fades onto the lichen tile right up to the floor, as it does beside it |
+| `render.junction.floorCornerKept` | the floor tile above keeps its corner pin: sand reaches it only by the diagonal |
+| `render.junctionZone.groundCornerLit` | the same junction hardened only by the east floor tile, as a painted tile hardens it: the lichen tile's corner is lit although its north side is open onto floor |
+| `render.junctionZone.floorCornerKept` | the west floor tile keeps its corner pin although lichen now reaches that corner through its open south side: sand sits on the diagonal. The first version lost this pin |
+| `render.relight.kept` | a steel tile in soil, hardened on one edge, keeps both pins: the soil re-lighting the corners is the soil the edge holds back |
+| `render.taper.kept` | the neighbour of a lone hardened edge keeps its shared corner pin: its open side there is the same floor, so a lit corner would cut a seam inside one surface |
+| `trims.defs.*` | each trim loads stuffable and paintable, and every one but the inside corner carries the extension; without it a trim is decoration, and nothing in game says so. The inside corner must NOT carry it: it covers a corner, not an edge, and the extension with an empty list would harden all four edges |
+| `trims.masks.*` | each of the six trims hardens exactly the edges its art covers, at all four rotations, the inside corner none. The expected edges are written out by hand from the textures rather than computed by the production formula, so a wrong offset in the defs or the formula fails instead of agreeing with itself |
+| `trims.stack.*` | a runner's turning tile works: an inside corner can be placed over a corner on the same tile, both stand once spawned, and the tile hardens only the corner's two edges |
+| `trims.atlas.patchApplied` | the prefix that keeps the trims' textures out of the static atlas applied, from the mod class's constructor |
+| `trims.atlas.*` | each trim draws at exactly one tile, with no facing mirrored from another, and every facing's texture is recognised as a trim texture, absent from every static atlas, and clamped. Each property is part of a clean joint and each is lost silently: atlased, a joint borrows a hairline from the neighbouring texture; wrapped, an edge blends with the texture's opposite edge; oversized, a piece draws its edge on top of its neighbour; mirrored, a piece is lit from the wrong side. The frame passes the mirror check through `allowFlip false`, since nothing stops code giving a non-rotatable thing a west rotation |
 | `area.lazy` | a map nobody painted carries no area; runs before anything paints |
 | `area.designators.*` | both tools are on the Zone tab, with icons that loaded |
 | `overlay.icon` | the overlay toggle shows our icon at 48 px, not the vanilla glyph it falls back to when ours is missing |
 | `area.equalsFourEdges` | the 5×5 of masks around a painted tile equals the 5×5 around four stacked single-edge markers, cell by cell |
 | `area.tools.refuseEachOther` | paint refuses painted tiles, clear refuses unpainted ones |
 | `area.clearRestores` | clearing puts all 25 masks back to zero |
+| `area.clearRemoves` | clearing the last painted tile through the clear tool takes the area off the map, so no saved area outlives the mod; `area.clearKeepsWhilePainted` is the control, clearing one of two tiles |
+| `area.emptyDropped` | the finalization tidy drops an empty area (what an adopted Perspective: Paths zone usually is) and keeps a painted one beside it |
 | `area.paintDirtiesTerrain` | painting dirties the terrain mesh in its own section and the next one across the boundary |
 | `area.repaintIsQuiet` | the control: painting a painted tile dirties nothing |
 | `area.duplicatesMerge` | two areas on one map fold into one holding both sets of tiles |
@@ -83,6 +100,8 @@ first time.
 | `migration.hardensOnMap` | an adopted tile hardens all eight directions |
 | `migration.savesAsOurs` | an adopted area saves back under this mod's class, with the legacy name gone from the file |
 | `migration.roundTrips` | and loads again with the same ID and every tile |
+| `migration.marksOnlyAdopted` | the legacy node's area is marked as adopted, and the same area reloaded from this mod's own class is not |
+| `migration.countsPaintedOnly` | the one-time message counts adopted areas with painted tiles only: the real fixture counts, an empty adopted area (what Perspective: Paths leaves on every map) does not |
 | `migration.standsDownWhileInstalled` | with Perspective: Paths loaded, the lookup answers with its class and nothing counts as adopted |
 | `yield.toolsShownWithoutPerspectivePaths` | without it, both area tools show and paint |
 | `yield.toolsHiddenWithPerspectivePaths` | with it, both are hidden and refuse every cell; the two runs are each other's control |
@@ -90,7 +109,7 @@ first time.
 | `yield.handBackIntoItsZone` | with it, our area moves into the zone it made when the map finalized: every tile arrives, ours is gone, and our model stops hardening those tiles |
 | `yield.handBackMakesItsZone` | the same when it has no zone yet: one is made through its own constructor, and it is the one its lookup by label finds |
 
-Each case clears its fixtures first, painted areas included. With two-sided
+Each case clears its fixtures first, painted areas and painted terrain included. With two-sided
 hardening and corner sealing, a stray marker reaches beyond its own cell, so
 leaked state would make later cases depend on earlier ones.
 
@@ -124,6 +143,11 @@ same ground when your own list has it.
 screenshot. Use the compare toggle (debug menu → Neat Edges → Toggle hard edges)
 to shoot both states from one camera position; it suppresses the rendering while
 leaving the overlay showing where every marker is.
+
+**How the trims look where they meet.** The harness pins what makes a joint
+clean, but whether one is clean is a screenshot: a close zoom near the art's
+own resolution, and the game's closest normal zoom, where tile boundaries fall
+between pixels and a sampling seam would show (see DEVELOPMENT, Textures).
 
 **An offline contact sheet of the hardening.** The trims' art has one,
 `check_trims.py`, because those are our own textures. The hardening is not: its

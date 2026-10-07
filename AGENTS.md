@@ -1,7 +1,7 @@
 # AGENTS.md
 
 A RimWorld 1.6 mod that stops terrain fading across a tile boundary. An
-invisible marker, a drag-painted area and three visible trims; one Harmony
+invisible marker, a drag-painted area and six visible trims; one Harmony
 assembly; generated textures. It ships no floors and no terrain of its own — it
 changes how *other* people's floors meet what they touch.
 
@@ -84,6 +84,18 @@ lights three rim verts — itself and both flanking diagonals — so an open
 neighbouring cardinal re-lights the very corner a hardened edge just sealed.
 That was the "a lone edge leaves both flanking tiles fringed" bug. Both
 mechanisms are needed; neither replaces the other.
+
+**The renderer consumes `RenderMaskAt`, not `EdgeMaskAt`.** A pin darkens its
+vertex for every fade on the cell, so a layout pin also cut fades that never
+crossed a hardened edge: two grounds meeting under a floor's hardened edge met
+in a hard line there. `RenderMaskAt` drops a pin only when every fade reaching
+that corner comes through an open side of its own terrain, no open side there
+is a seam inside the cell's own surface, and no hardened edge there holds the
+fade's terrain back (DESIGN §4). It replays diagonals unsubstituted, because
+dropping a pin un-substitutes its diagonal in the renderer too.
+**Keep `EdgeMaskAt` a pure function of the marker layout** — the harness's mask
+cases assert exactly that — and put anything that reads terrain in the render
+step, whose cases paint terrain fixtures.
 
 ## Rules that validate fine and fail later
 
@@ -186,6 +198,15 @@ loads with two is merged down to one at finalization. Everything resolves THE
 area as the first one found, so a second would keep hardening tiles the clear
 tool cannot reach.
 
+**An empty area must never reach a save.** Clearing the last painted tile
+removes the area (`Area_HardEdges.Discard`, from the `Set` override), and map
+finalization drops any that loads empty, which every map adopted from
+Perspective: Paths does, since it adds an empty zone to each. The reason is
+removal: a saved area whose class is missing costs the map its whole area
+list (DESIGN §8), so clearing every tile is how a player makes a map safe to
+remove this mod from. Keep both paths, and keep anything that holds the area
+across a clear tolerant of it leaving the list.
+
 ## Scope rules
 
 **`NE_` prefixes defNames; textures live under `Textures/NeatEdges/`.** Both
@@ -193,7 +214,7 @@ namespaces are global across every loaded mod.
 
 **No floors, no terrain.** This mod works with anyone's flooring; shipping its
 own would put it in competition with the mods it exists to serve. Its art is
-the marker's ghost, the two tool icons, the overlay toggle's icon and the three
+the marker's ghost, the two tool icons, the overlay toggle's icon and the six
 trims, all generated. The ghost and the trims are greyscale, so the trims take
 their stuff's colour and paint like any building. The icons copy the vanilla
 icons they sit among instead (see DEVELOPMENT, Textures): the toggle is pixel
@@ -203,13 +224,45 @@ area's cyan: that blue is the home area's in those menus.
 
 **The trims' `edges` are measured from their art.** Rotation names the edge the
 band hugs, with the offsets in the defs (border `[0]`, corner `[0,1]`, runner
-`[0,2]`); the harness pins every rotation (`trims.masks.*`). Change the art and
-both must be re-measured, or a trim hardens an edge it does not cover.
+`[0,2]`, end cap `[3,0,1]`, frame all four); the harness pins every rotation
+(`trims.masks.*`). Change the art and both must be re-measured, or a trim
+hardens an edge it does not cover.
 
-**The runner's west facing is authored, not mirrored.** The engine's
-auto-mirror would flip the absolute lighting across both rails. Deleting
-`FloorBorderDouble_west.png` brings the bug back silently; `check_trims.py`
-fails if it goes missing while the art still needs it.
+**The inside corner carries no `BlocksTerrainFade`, and must not.** It covers a
+corner of its tile, not an edge, and the strips beside it already seal that
+corner. The extension with an empty list means all four edges, so "adding it
+with nothing in it" would harden a whole tile the piece only touches; the
+harness pins the absence (`trims.defs.*`).
+
+**New trim shapes are drawn by `_frame`, and `_frame` must keep redrawing the
+shipped pieces.** It is the corner's joining rules generalised to any set of
+edges; `check_trims.py` fails the moment it stops reproducing all twelve
+straight, corner and runner facings pixel for pixel. Draw a new shape any
+other way and it stops being provably one of the family.
+
+**Authored facings, not mirrored ones.** The straight's, the runner's and the
+end cap's west facings are authored, because the engine's auto-mirror flips
+the absolute lighting: the lit lip lands on the shaded side. The inside corner
+ships all four, being chiral, and the frame never mirrors (`allowFlip false`).
+The straight was the last one mirrored, on the belief that one rail could take
+it, until its lip visibly stepped at every corner it met. Deleting any of those
+files brings the bug back silently; `check_trims.py` fails if one goes missing
+while the art still needs it, and the harness fails a mirrored west.
+
+**The trims draw at exactly one tile, from textures kept out of the static
+atlas.** The game packs small building textures into an atlas with no gutter
+between them, so an atlased trim's edge texels are filtered against whatever
+sits beside it there, and every joint shows a hairline of that colour.
+`Patch_TrimAtlas` keeps every texture under `Textures/NeatEdges/Trim/` out of
+the atlas and clamps it, so a piece ends on its own art and a joint is the
+drawing carrying on. It is applied from `NeatEdgesMod`'s constructor, not with
+the rest from `HarmonyInit`: by the time static constructors run, every def
+has already offered its textures to the atlas. So keep trim textures in that
+folder, and keep `drawSize` at one tile: the 4% overdraw the trims used to
+carry only moved the hairline onto the neighbouring piece, and any overdraw
+puts each piece's edge back on top of the next. The harness pins it
+(`trims.atlas.*`); whether a joint LOOKS clean is still a close-zoom capture
+in a running game.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this

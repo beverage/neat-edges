@@ -19,10 +19,13 @@ All of it is in the Architect menu:
   beside the home area, do whole tiles, every edge at once, painted by dragging
   the way you paint a home area. Painting is free and instant, with no build
   order and no pawn involved.
-- **Floor border**, **floor border corner** and **floor runner border**, on the
-  **Floors** tab, are visible trim: strips set into the floor along one edge, around a corner, or
-  down both sides of a corridor. Built from wood, stone or metal, they take
-  paint, and each hardens the edges it covers.
+- **Floor borders**, on the **Floors** tab, are visible trim set into the
+  floor: a strip along one edge, a corner, a runner down both sides of a
+  corridor, an end cap closing off a runner or a one-tile path, and a frame
+  around a single tile. Where a border turns around an inside corner, such as a
+  wall jutting into the room, the inside corner piece fills the notch the two
+  strips leave between them. Built from wood, stone or metal, they take paint,
+  and each hardens the edges it covers.
 
 The marker and the area draw nothing on the map. The floor you already laid
 meets the boundary cleanly instead of being washed over.
@@ -52,7 +55,10 @@ when the save loads, and a message says so.
 
 **Switching over?** Remove it and load your save. The areas you painted with it
 load as Neat Edges' hard edge area, and a message confirms it once the game is
-up. The tools are on the Zone tab, where its were.
+up. The tools are on the Zone tab, where its were. Removing it on its own
+is not safe: it adds its zone to every map, painted or not, the game gives no
+way to delete it, and a save that still holds one loses the map's whole area
+list, home area included. Neat Edges loads those zones as its own instead.
 
 One visible difference: Perspective: Paths stopped terrain fading into a painted
 tile, but still let the painted tile's own terrain fade out onto unpainted
@@ -68,9 +74,11 @@ Works with any floor from any mod, alongside vanilla bridges, and with Dub's
 Paint Shop colours intact. Requires
 [Harmony](https://steamcommunity.com/workshop/filedetails/?id=2009463077).
 
-You can add it to a running save. Removing it drops the markers, the trims and
-the painted area: RimWorld logs an error for each missing type on the next load,
-and your floors and terrain are untouched.
+You can add it to a running save. Before removing it, use **Clear hard edge
+area** on every map you painted: a save that still holds the area loses the
+map's whole area list, home area included. Clearing the last painted tile
+removes the area itself. Markers and trims can stay; RimWorld drops each one
+with a load error, and your floors and terrain are untouched.
 
 Other mods can make their own decorations harden edges too, through the same
 extension the trims carry, with no dependency on this one beyond a `MayRequire`.
