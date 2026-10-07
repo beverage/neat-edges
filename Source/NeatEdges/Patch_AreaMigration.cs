@@ -11,9 +11,12 @@ namespace NeatEdges
     ///
     /// Perspective: Paths stores its per-tile override as an `Area` subclass,
     /// `PerspectivePaths.Area_InvertEdges`, and the original and the continued
-    /// release both write that one class name. Remove the mod today and every
-    /// map that carries one logs "Could not find class" on load and loses the
-    /// area; its own FAQ tells players to clear all areas before removing it.
+    /// release both write that one class name. Remove the mod with nothing to
+    /// adopt it and every map that carries one loses its WHOLE area list, home
+    /// area included (DESIGN §8). That is every map it was ever loaded on: it
+    /// adds its zone to each map at finalization, painted or not, and the zone
+    /// is not player-deletable, so clearing its tiles, as its own FAQ advises,
+    /// leaves the zone in the save.
     ///
     /// Its saved node is a plain `Area`: an ID and a grid, nothing else. So is
     /// <see cref="Area_HardEdges"/>'s. Answering the type lookup with our class
@@ -60,6 +63,22 @@ namespace NeatEdges
         /// </summary>
         internal static int adopted;
 
+        /// <summary>
+        /// Set when a node is answered, and taken by the area the scribe builds
+        /// next (<see cref="Area_HardEdges"/>'s parameterless constructor):
+        /// `ScribeExtractor.SaveableFromNode` resolves the type and then
+        /// instantiates it, with nothing between. That is how an adopted area is
+        /// told apart from one this mod saved, which share a class. Cleared at
+        /// every map finalization, so a lookup with no construction after it
+        /// (the harness makes those) cannot mark a later area.
+        /// </summary>
+        internal static bool pending;
+
+        /// <summary>Adopted areas with painted tiles, since the last announcement.</summary>
+        internal static int adoptedPainted;
+
+        internal static bool announceQueued;
+
         public static void Postfix(string providedClassName, ref Type __result)
         {
             if (__result != null || providedClassName == null) return;
@@ -67,30 +86,71 @@ namespace NeatEdges
 
             __result = type;
             adopted++;
+            pending = true;
         }
 
         /// <summary>
-        /// Tells the player once, after the load, that the areas came across.
-        /// The tools are on the Zone tab, where Perspective: Paths kept its
-        /// own, but without this the only evidence the migration ran is that
-        /// nothing broke.
+        /// Counts this map's adopted areas that have painted tiles. Called at
+        /// map finalization before the merge and the empty-area drop, which
+        /// would lose the mark or the area.
         ///
-        /// Deferred, because map finalization can run inside the loading event,
-        /// and a message plays a sound.
+        /// Only painted ones count, because Perspective: Paths adds an empty
+        /// zone to every map: counting every adoption would tell a player their
+        /// areas came across on maps where they never painted, and those empty
+        /// areas are dropped a moment later anyway.
+        /// </summary>
+        internal static void CountPainted(Map map)
+        {
+            pending = false;
+            List<Area> areas = map?.areaManager?.AllAreas;
+            adoptedPainted += CountPainted(areas);
+
+            // Each area is counted once: a later finalization of the same map
+            // must not announce it again.
+            if (areas == null) return;
+            foreach (Area area in areas)
+            {
+                if (area is Area_HardEdges hard) hard.adoptedFromOtherMod = false;
+            }
+        }
+
+        internal static int CountPainted(IEnumerable<Area> areas)
+        {
+            int count = 0;
+            if (areas == null) return count;
+            foreach (Area area in areas)
+            {
+                if (area is Area_HardEdges hard && hard.adoptedFromOtherMod && hard.TrueCount > 0) count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Tells the player once, after the load, that the areas they painted
+        /// came across. The tools are on the Zone tab, where Perspective: Paths
+        /// kept its own, but without this the only evidence the migration ran
+        /// is that nothing broke. Silent when nothing painted came across.
+        ///
+        /// Deferred until the loading event finishes, so every map has been
+        /// counted first, and because a message plays a sound.
         /// </summary>
         internal static void AnnounceAdopted()
         {
-            if (adopted == 0) return;
-
-            int count = adopted;
             adopted = 0;
+            if (adoptedPainted == 0 || announceQueued) return;
 
-            Log.Message("[NeatEdges] adopted " + count + " hard-edge area(s) saved by "
-                + "another mod; they load as this mod's painted area.");
+            announceQueued = true;
+            LongEventHandler.ExecuteWhenFinished(() =>
+            {
+                int count = adoptedPainted;
+                adoptedPainted = 0;
+                announceQueued = false;
 
-            LongEventHandler.ExecuteWhenFinished(() => Messages.Message(
-                "NeatEdges.AdoptedAreas".Translate(),
-                MessageTypeDefOf.NeutralEvent, historical: false));
+                Log.Message("[NeatEdges] adopted " + count + " painted hard-edge area(s) saved by "
+                    + "another mod; they load as this mod's painted area.");
+                Messages.Message("NeatEdges.AdoptedAreas".Translate(),
+                    MessageTypeDefOf.NeutralEvent, historical: false);
+            });
         }
     }
 }

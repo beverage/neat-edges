@@ -75,9 +75,14 @@ namespace NeatEdges
             // Load-time housekeeping for the painted area, here because this is
             // the one hook that runs per map once every area has loaded. All of
             // it is idempotent, so running again on a later FinalizeInit is
-            // harmless. The merge goes first, so a hand-back to Perspective:
-            // Paths has at most one area to move.
+            // harmless. Adopted areas with painted tiles are counted first, for
+            // the announcement, before the merge can fold one away; the merge
+            // goes before the hand-back, so a hand-back to Perspective: Paths
+            // has at most one area to move, and an area left empty after it,
+            // or adopted empty, is dropped before it can reach a save.
+            Patch_AreaMigration.CountPainted(map);
             Area_HardEdges.MergeDuplicates(map);
+            Area_HardEdges.RemoveEmpty(map);
             Patch_AreaMigration.AnnounceAdopted();
             PerspectivePathsInterop.HandBack(map);
             PerspectivePathsInterop.AnnounceHandedBack();

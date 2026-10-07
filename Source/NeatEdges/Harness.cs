@@ -153,11 +153,14 @@ namespace NeatEdges
             Guard("overlay.icon", CaseOverlayIcon);
             Guard("area.equalsFourEdges", () => CaseAreaEqualsFourEdges(map));
             Guard("area.clear", () => CaseAreaClearRestores(map));
+            Guard("area.clearRemoves", () => CaseAreaClearRemoves(map));
+            Guard("area.emptyDropped", () => CaseAreaEmptyDropped(map));
             Guard("area.dirty", () => CaseAreaPaintDirtiesTerrain(map));
             Guard("area.duplicates", () => CaseAreaDuplicatesMerge(map));
             Guard("migration.resolves", CaseMigrationResolvesLegacyClass);
             Guard("migration.realNode", () => CaseMigrationLoadsRealNode(map));
             Guard("migration.roundTrip", CaseMigrationRoundTrips);
+            Guard("migration.countsPainted", () => CaseMigrationCountsPainted(map));
             Guard("yield.tools", () => CaseYieldTools(map));
             Guard("yield.handBack", () => CaseYieldHandBack(map));
 
@@ -879,8 +882,9 @@ namespace NeatEdges
 
         /// <summary>
         /// Nothing is added to a map nobody painted. An empty area on every map
-        /// would be a line in every save, and a load error on every map of a
-        /// player who later removes the mod. Runs before any case paints.
+        /// would be a line in every save, and would cost every map its whole
+        /// area list for a player who later removes the mod. Runs before any
+        /// case paints.
         /// </summary>
         internal static void CaseAreaIsLazy(Map map)
         {
@@ -1002,6 +1006,59 @@ namespace NeatEdges
             }
             Check(stillHard == 0, "area.clearRestores",
                 $"{stillHard} of 25 cells still hardened after clearing");
+            Clear();
+        }
+
+        /// <summary>
+        /// Clearing the last painted tile takes the area off the map, so a
+        /// player can remove the mod without a saved area of a missing class
+        /// costing the map its whole area list. The control is the tile cleared
+        /// before it: the area must outlive every tile but the last.
+        ///
+        /// Through the real clear tool, which is what a player uses.
+        /// </summary>
+        internal static void CaseAreaClearRemoves(Map map)
+        {
+            Clear();
+            IntVec3 a = Origin(map);
+            IntVec3 b = a + new IntVec3(4, 0, 0);
+            Designator_AreaHardEdgesExpand expand = new Designator_AreaHardEdgesExpand();
+            Designator_AreaHardEdgesClear clear = new Designator_AreaHardEdgesClear();
+
+            expand.DesignateSingleCell(a);
+            expand.DesignateSingleCell(b);
+            clear.DesignateSingleCell(a);
+            bool keptWhilePainted = Area_HardEdges.On(map) != null;
+            clear.DesignateSingleCell(b);
+            int left = map.areaManager.AllAreas.Count(x => x is Area_HardEdges);
+
+            Check(keptWhilePainted, "area.clearKeepsWhilePainted",
+                "clearing one of two painted tiles removed the area");
+            Check(left == 0, "area.clearRemoves",
+                $"{left} hard-edge area(s) left after clearing every painted tile");
+            Clear();
+        }
+
+        /// <summary>
+        /// Map finalization drops an area that arrives empty: Perspective:
+        /// Paths adds an empty zone to every map, and the migration adopts each
+        /// one. The control is a painted area beside it, which must stay.
+        /// </summary>
+        internal static void CaseAreaEmptyDropped(Map map)
+        {
+            Clear();
+            IntVec3 c = Origin(map);
+            Area_HardEdges painted = Area_HardEdges.GetOrCreate(map);
+            painted[c] = true;
+            Area_HardEdges empty = new Area_HardEdges(map.areaManager);
+            map.areaManager.AllAreas.Add(empty);
+
+            int removed = Area_HardEdges.RemoveEmpty(map);
+            bool emptyGone = !map.areaManager.AllAreas.Contains(empty);
+            bool paintedKept = map.areaManager.AllAreas.Contains(painted) && painted[c];
+
+            Check(removed == 1 && emptyGone && paintedKept, "area.emptyDropped",
+                $"removed {removed}, empty gone: {emptyGone}, painted kept: {paintedKept}");
             Clear();
         }
 
@@ -1143,6 +1200,7 @@ namespace NeatEdges
             Type control = BackCompatibility.GetBackCompatibleType(
                 typeof(Area), "PerspectivePaths.Area_NoSuchArea", null);
             Patch_AreaMigration.adopted = 0;
+            Patch_AreaMigration.pending = false;
 
             Check(legacy == typeof(Area_HardEdges), "migration.resolvesLegacyClass",
                 $"got {legacy?.FullName ?? "null"}");
@@ -1268,6 +1326,42 @@ namespace NeatEdges
             Check(error == null && same, "migration.roundTrips",
                 error ?? $"reloaded {after?.ActiveCells.Count() ?? -1} tiles against "
                          + $"{before.ActiveCells.Count()}, same id: {after?.ID == before.ID}");
+
+            // The announcement counts only areas that came from another mod, so
+            // the mark must follow the node, not the class the two now share.
+            Check(before.adoptedFromOtherMod && after != null && !after.adoptedFromOtherMod,
+                "migration.marksOnlyAdopted",
+                $"legacy node marked: {before.adoptedFromOtherMod}, "
+                + $"our own node marked: {after?.adoptedFromOtherMod}");
+        }
+
+        /// <summary>
+        /// The announcement counts adopted areas with painted tiles only.
+        /// Perspective: Paths adds an empty zone to every map, so counting every
+        /// adoption told a switcher their areas came across on maps they never
+        /// painted. The real fixture is the painted one; an adopted area with
+        /// nothing on it is the control.
+        /// </summary>
+        internal static void CaseMigrationCountsPainted(Map map)
+        {
+            if (GenTypes.GetTypeInAnyAssembly(LegacyClass) != null)
+            {
+                Skip("migration.countsPaintedOnly", "Perspective: Paths is loaded; nothing is adopted, by design");
+                return;
+            }
+
+            List<Area> loaded = LoadAreas(LegacyAreaFixture, out string error);
+            Area_HardEdges painted = loaded?.FirstOrDefault() as Area_HardEdges;
+            if (error != null || painted == null)
+            {
+                Check(false, "migration.countsPaintedOnly", "the fixture did not load: " + (error ?? "wrong type"));
+                return;
+            }
+            Area_HardEdges empty = new Area_HardEdges(map.areaManager) { adoptedFromOtherMod = true };
+
+            int counted = Patch_AreaMigration.CountPainted(new List<Area> { painted, empty });
+            Check(counted == 1, "migration.countsPaintedOnly",
+                $"counted {counted} of one painted and one empty adopted area");
         }
 
         /// <summary>
@@ -1299,6 +1393,7 @@ namespace NeatEdges
             finally
             {
                 Patch_AreaMigration.adopted = 0;
+                Patch_AreaMigration.pending = false;
                 if (File.Exists(path)) File.Delete(path);
             }
 

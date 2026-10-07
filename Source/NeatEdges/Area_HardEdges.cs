@@ -35,9 +35,21 @@ namespace NeatEdges
     /// </summary>
     public class Area_HardEdges : Area
     {
+        /// <summary>
+        /// Loaded from another mod's saved node (<see cref="Patch_AreaMigration"/>).
+        /// Runtime only, and must stay so: a scribed field here would break the
+        /// shared saved shape the migration depends on.
+        /// </summary>
+        internal bool adoptedFromOtherMod;
+
         /// <summary>For the scribe, which instantiates through it on load.</summary>
         public Area_HardEdges()
         {
+            if (Patch_AreaMigration.pending)
+            {
+                adoptedFromOtherMod = true;
+                Patch_AreaMigration.pending = false;
+            }
         }
 
         public Area_HardEdges(AreaManager areaManager) : base(areaManager)
@@ -70,6 +82,8 @@ namespace NeatEdges
         /// `regenAdjacentCells` because hardening is two-sided: the tile across
         /// each edge changes, and so do the diagonal neighbours whose corners it
         /// seals, and any of them may sit in the next section.
+        ///
+        /// Clearing the last painted tile removes the area (<see cref="Discard"/>).
         /// </summary>
         protected override void Set(IntVec3 c, bool val)
         {
@@ -79,6 +93,47 @@ namespace NeatEdges
 
             Map.mapDrawer?.MapMeshDirty(c, (ulong)MapMeshFlagDefOf.Terrain,
                 regenAdjacentCells: true, regenAdjacentSections: false);
+
+            if (!val && TrueCount == 0) Discard();
+        }
+
+        /// <summary>
+        /// Takes this area off its map, so a map with nothing painted saves no
+        /// trace of this mod's area.
+        ///
+        /// WHY IT MATTERS: a saved area whose class is missing takes the map's
+        /// WHOLE area list down with it. The engine loads the list as one, its
+        /// links pass throws on the null an unresolvable class leaves, and the
+        /// map ends up with no areas at all: home, allowed and roof gone. Then
+        /// map loading itself fails at the first reader of the home area, and
+        /// the game's root update throws every frame (DESIGN §8 has the tested
+        /// Perspective: Paths cases). So a player removing this mod must
+        /// be able to leave no `Area_HardEdges` behind, and clearing every
+        /// painted tile is how they do it. The area keeps its manager reference,
+        /// so a caller still holding it, such as a drag in progress, stays safe.
+        ///
+        /// Removed around `AreaManager.Remove`, which refuses an area that is
+        /// not player-deletable, as <see cref="MergeDuplicates"/> does.
+        /// </summary>
+        internal void Discard()
+        {
+            areaManager?.AllAreas.Remove(this);
+        }
+
+        /// <summary>
+        /// Removes every empty hard-edge area on the map. Returns how many.
+        ///
+        /// Clearing removes an area as it empties, but one can still arrive
+        /// empty: Perspective: Paths adds an empty zone to every map, and the
+        /// migration adopts each one as ours. Run at map finalization, after
+        /// duplicates are merged.
+        /// </summary>
+        internal static int RemoveEmpty(Map map)
+        {
+            List<Area> areas = map?.areaManager?.AllAreas;
+            if (areas == null) return 0;
+
+            return areas.RemoveAll(a => a is Area_HardEdges hard && hard.TrueCount == 0);
         }
 
         /// <summary>
@@ -92,10 +147,10 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// Created on first paint, not with the map. An empty area on every map
-        /// would be one more thing in every save, and the one thing a player who
-        /// removes this mod would pay an error line for, on maps where they never
-        /// used it.
+        /// Created on first paint, not with the map, and removed again when the
+        /// last tile is cleared. An empty area on every map would be one more
+        /// thing in every save, and would cost every map its whole area list if
+        /// the player later removes this mod (<see cref="Discard"/>).
         /// </summary>
         internal static Area_HardEdges GetOrCreate(Map map)
         {
