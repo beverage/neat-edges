@@ -20,22 +20,29 @@
     <li>Ludeon.RimWorld</li>
     <li>Ludeon.RimWorld.Odyssey</li>
   </loadAfter>
-  <description>Stop soil and water washing a ragged fringe across your floors.
+  <description>RimWorld fades its terrain tiles into its neighbors, making your floors look like they are dissolving at the rim. Neat Edges allows you just that, hard borders between tiles, trimmed or untrimmed, to suit whatever appearance or build you like.
 
-RimWorld fades every terrain one tile into whatever it touches, and the receiving tile gets no say in it. That is why a clean stone terrace meeting open ground always looks like it is dissolving at the rim. Bridges are the one thing in the game that escape it, and only because they are bridges.
+Meant to replace Perspective: Paths. Neat Edges provides the same hard edge zones, in addition to its standalone edges, and trim pieces.
 
-Neat Edges gives you that clean line anywhere, from the Floors and Zone tabs of the Architect menu.
+· Hard edge areas: whole tiles, painted as an area. Free to place, and not only prevents terrain from fading into a tile, prevents the tile from fading into its neighbors.
+· Hard edges: the same, but for specific edges of a single tile. Also free.
+· Floor borders: trim pieces in wood, stone, or metals that takes paint. Straight edges, corners, runners, end caps, frames, and corner pieces. Each piece hardens the edges it covers.
 
-· Hard edge: an invisible marker. Pick a side by rotating, and stack them on one tile for any combination.
-· Hard edge area: whole tiles, every edge at once, painted by dragging the way you paint a home area. Free and instant, and nothing is drawn on the map.
-· Floor borders: visible trim in wood, stone or metal that takes paint, as a straight strip, a corner, a runner down both sides of a corridor, an end cap for a runner or a one-tile path, or a frame around a single tile, plus an inside corner that fills the notch where a border turns around a jutting wall. Each hardens the edges it covers.
-· Corners close themselves. Where two hardened edges meet, the corner between them is sealed too, and a run ends crisply instead of the fringe curling around its last tile.
-· The marker costs no materials, since it changes how an edge draws and nothing else.
-· An overlay toggle on the bottom-right row shows every marker and the painted area, because an invisible thing you cannot find is an invisible thing you cannot remove.
+Where edges meet, corners are sealed too so runs end square without terrain fringes. An overlay toggle exists in the bottom-right cluster of map toggles to reveal the zones and hard edges.
 
-Using Perspective: Paths? While it is installed, Neat Edges leaves whole-tile painting to it and hides its own area tools, and the marker and the trims work alongside it. Remove it and load your save, and the areas you painted with it load as the hard edge area. Removing it on its own is not safe: it adds its zone to every map, painted or not, the game gives no way to delete it, and a save that still holds one loses the map's whole area list, home area included. Neat Edges loads those zones as its own instead. The painted area follows Owlchemist's Perspective: Paths, which solved the whole-tile case first.
+If you already have Perspective: Paths, just add Neat Edges, remove it, and load your save. The areas painted in Perspective: Paths come back as Neat Edge hard edge zones, tile for tile, with its painting tools in the Zone tab right where they used to be. The original and continued versions of Perspective: Paths save the same way, so both carry over. If you keep it installed instead, Neat Edges yields its own hard edge features, and provides only the floor borders.
 
-You can add it to a running save. Before removing it, clear the painted area on every map you painted: a save that still holds it loses the map's whole area list, home area included. Clearing the last painted tile removes the area itself. Markers and trims can stay; RimWorld drops each one with a load error, and your floors and terrain are untouched.
+Warning: removing Perspective: Paths on its own is not safe as it adds its zone to every map, painted or not, the game gives no way to delete it, and a save that still holds one loses the map's whole area list, home area included.
 
-Works with any floor from any mod, and with vanilla bridges alongside.</description>
+Works with any floor from any mod, keeps Dub's Paint Shop colours, and works alongside vanilla bridges. Requires Harmony. You can add it to a running save, but before removing it, use Clear hard edge area on every map you painted. A save that still holds the area loses the map's whole area list, home area included, and clearing the last painted tile removes the area itself. Markers and borders can stay; RimWorld drops each one with a load error, and floors and terrain are untouched.
+
+Other mods can make their own decorations harden edges through the extension the floor borders carry, with no dependency beyond a MayRequire.
+
+Recommended with:
+· Flooring Floors. Neat Edges provides borders, but no floors of its own, and this mod adds hundreds, in all materials, and expands on its limited set of border pieces.
+· Dub's Paint Shop. Neat Edges' border pieces are all paintable, so add some color to builds!
+
+The painted area follows Owlchemist's Perspective: Paths, which solved the whole-tile case first.
+
+MIT licensed, with the design notes and a regression harness in the repository. Written with AI assistance.</description>
 </ModMetaData>
