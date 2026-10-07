@@ -147,6 +147,8 @@ namespace NeatEdges
             Guard("render.taper", () => CaseTaperPinKept(map));
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
+            Guard("trims.stack", () => CaseTrimStack(map));
+            Guard("trims.atlas", CaseTrimAtlas);
             Guard("area.designators", CaseAreaDesignatorsRegistered);
             Guard("overlay.icon", CaseOverlayIcon);
             Guard("area.equalsFourEdges", () => CaseAreaEqualsFourEdges(map));
@@ -670,25 +672,39 @@ namespace NeatEdges
         // ---- the visible trims ------------------------------------------
 
         internal static readonly string[] TrimNames =
-            { "NE_FloorBorder", "NE_FloorBorderCorner", "NE_FloorBorderDouble" };
+        {
+            "NE_FloorBorder", "NE_FloorBorderCorner", "NE_FloorBorderInsideCorner",
+            "NE_FloorBorderDouble", "NE_FloorBorderEndCap", "NE_FloorBorderFrame",
+        };
 
         /// <summary>
-        /// The three trims load, stuffable and paintable, each carrying the
-        /// extension. A trim without the extension is decoration and nothing
-        /// more, and nothing in game would say so.
+        /// The trim that must NOT carry the extension. The inside corner covers
+        /// a corner of its tile, not an edge, and the strips beside it already
+        /// seal that corner; the extension with an empty list would harden all
+        /// four edges instead.
+        /// </summary>
+        internal const string InsideCorner = "NE_FloorBorderInsideCorner";
+
+        /// <summary>
+        /// Every trim loads stuffable and paintable, and every one but the
+        /// inside corner carries the extension. A trim missing it is decoration
+        /// and nothing more, and nothing in game would say so; the inside
+        /// corner carrying it would harden a whole tile it only touches.
         /// </summary>
         internal static void CaseTrimDefs()
         {
             foreach (string name in TrimNames)
             {
                 ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
+                bool wantExtension = name != InsideCorner;
+                bool hasExtension = def?.GetModExtension<BlocksTerrainFade>() != null;
                 bool ok = def != null && def.MadeFromStuff
                     && def.building != null && def.building.paintable
-                    && def.GetModExtension<BlocksTerrainFade>() != null;
+                    && hasExtension == wantExtension;
                 Check(ok, "trims.defs." + name,
                     def == null ? "missing"
                         : $"stuff {def.MadeFromStuff}, paintable {def.building?.paintable}, "
-                          + $"extension {def.GetModExtension<BlocksTerrainFade>() != null}");
+                          + $"extension {hasExtension} (want {wantExtension})");
             }
         }
 
@@ -699,17 +715,22 @@ namespace NeatEdges
         /// or the formula fails here instead of agreeing with itself. They
         /// come from the textures: the border's band sits in the north margin
         /// of _north; the corner's north facing covers N and E; the runner's
-        /// covers N and S.
+        /// covers N and S; the end cap's covers W, N and E; the frame covers
+        /// all four whatever its rotation; the inside corner covers no edge.
         ///
-        /// Adjacency indices: S=0, W=2, N=4, E=6.
+        /// Adjacency indices: S=0, W=2, N=4, E=6. Rows follow TrimNames.
         /// </summary>
         internal static void CaseTrimMasks(Map map)
         {
             Rot4[] rots = { Rot4.North, Rot4.East, Rot4.South, Rot4.West };
             int[][] border = { new[] { 4 }, new[] { 6 }, new[] { 0 }, new[] { 2 } };
             int[][] corner = { new[] { 4, 6 }, new[] { 6, 0 }, new[] { 0, 2 }, new[] { 2, 4 } };
+            int[][] inside = { new int[0], new int[0], new int[0], new int[0] };
             int[][] runner = { new[] { 4, 0 }, new[] { 6, 2 }, new[] { 0, 4 }, new[] { 2, 6 } };
-            int[][][] expected = { border, corner, runner };
+            int[][] endCap = { new[] { 2, 4, 6 }, new[] { 4, 6, 0 }, new[] { 6, 0, 2 }, new[] { 0, 2, 4 } };
+            int[] all = { 0, 2, 4, 6 };
+            int[][] frame = { all, all, all, all };
+            int[][][] expected = { border, corner, inside, runner, endCap, frame };
 
             for (int t = 0; t < TrimNames.Length; t++)
             {
@@ -731,6 +752,127 @@ namespace NeatEdges
                 }
             }
             Clear();
+        }
+
+        /// <summary>
+        /// A runner turning a corner stacks a corner (its outer rails) and an
+        /// inside corner (its inner joint) on one tile, so both must be
+        /// placeable there and both must stand. The engine allows it at every
+        /// stage because neither is an edifice: blueprint placement refuses
+        /// only the same def at the same rotation, and spawning wipes only an
+        /// edifice with an edifice. This pins that, and that the inside corner
+        /// adds no edge to the tile it shares.
+        ///
+        /// The cell is found by asking whether a corner alone could be placed
+        /// there, so the placement check below cannot fail on the terrain.
+        /// </summary>
+        internal static void CaseTrimStack(Map map)
+        {
+            ThingDef corner = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderCorner");
+            ThingDef inside = DefDatabase<ThingDef>.GetNamedSilentFail(InsideCorner);
+            if (corner == null || inside == null)
+            {
+                Skip("trims.stack", "a def is missing");
+                return;
+            }
+
+            Clear();
+            IntVec3 cell = IntVec3.Invalid;
+            foreach (IntVec3 c in GenRadial.RadialCellsAround(Origin(map), 12f, true))
+            {
+                if (c.InBounds(map) && c.GetThingList(map).Count == 0
+                    && GenConstruct.CanPlaceBlueprintAt(corner, c, Rot4.West, map,
+                           stuffDef: GenStuff.DefaultStuffFor(corner)).Accepted)
+                {
+                    cell = c;
+                    break;
+                }
+            }
+            if (!cell.IsValid)
+            {
+                Skip("trims.stack", "no buildable cell near the map centre");
+                return;
+            }
+
+            Place(map, cell, corner, Rot4.West);
+            AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(inside, cell, Rot4.East, map,
+                stuffDef: GenStuff.DefaultStuffFor(inside));
+            Check(report.Accepted, "trims.stack.placeInsideOverCorner",
+                "refused: " + report.Reason);
+
+            Place(map, cell, inside, Rot4.East);
+            List<Thing> here = cell.GetThingList(map);
+            bool both = here.Any(t => t.def == corner && t.Spawned)
+                && here.Any(t => t.def == inside && t.Spawned);
+            Check(both, "trims.stack.bothStand",
+                "on the cell: " + string.Join(", ", here.Select(t => t.def.defName)));
+
+            int got = Patch_SidedFadeBlock.MarkerMask(cell, map);
+            int want = (1 << 2) | (1 << 4);    // the corner facing west: W and N
+            Check(got == want, "trims.stack.insideAddsNoEdge",
+                $"got {Show(got)}, expected {Show(want)}");
+            Clear();
+        }
+
+        /// <summary>
+        /// Every trim draws at exactly one tile, from its own texture, clamped,
+        /// with every facing authored. Each is part of what keeps a joint
+        /// clean, and losing any one is silent in game, where the symptom is a
+        /// hairline at a joint or a step in a lip:
+        ///
+        ///   - in the static atlas (the prefix not applied, or no longer
+        ///     recognising our textures), a joint borrows a hairline from
+        ///     whatever texture the packer put beside the trim;
+        ///   - wrapping rather than clamping, an edge texel blends with the
+        ///     texture's opposite edge, which is transparent on most pieces;
+        ///   - drawn larger than its tile, a piece overlaps its neighbour again
+        ///     and whichever draws last shows its own edge on top;
+        ///   - a west facing mirrored from east is lit from the wrong side, the
+        ///     step the straight showed until its west was authored.
+        /// </summary>
+        internal static void CaseTrimAtlas()
+        {
+            Check(Patch_TrimAtlas.applied, "trims.atlas.patchApplied",
+                "the TryInsertStatic prefix did not apply");
+            Rot4[] rots = { Rot4.North, Rot4.East, Rot4.South, Rot4.West };
+            foreach (string name in TrimNames)
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
+                if (def?.graphic == null) { Skip("trims.atlas." + name, "def or graphic missing"); continue; }
+
+                var problems = new List<string>();
+                if (def.graphicData.drawSize != Vector2.one)
+                {
+                    problems.Add("drawSize " + def.graphicData.drawSize);
+                }
+                if (def.graphic.WestFlipped)
+                {
+                    problems.Add("west is mirrored from east");
+                }
+                foreach (Rot4 rot in rots)
+                {
+                    string facing = rot.ToStringHuman() + ": ";
+                    if (!(def.graphic.MatAt(rot).mainTexture is Texture2D texture))
+                    {
+                        problems.Add(facing + "no texture");
+                        continue;
+                    }
+                    if (!Patch_TrimAtlas.IsTrimTexture(texture))
+                    {
+                        problems.Add(facing + "not recognised as a trim texture");
+                    }
+                    if (GlobalTextureAtlasManager.TryGetStaticTile(def.category.ToAtlasGroup(), texture, out _,
+                            ignoreFoundInOtherAtlas: true))
+                    {
+                        problems.Add(facing + "in the static atlas");
+                    }
+                    if (texture.wrapMode != TextureWrapMode.Clamp)
+                    {
+                        problems.Add(facing + "wraps " + texture.wrapMode);
+                    }
+                }
+                Check(problems.Count == 0, "trims.atlas." + name, string.Join("; ", problems.Distinct()));
+            }
         }
 
         // ---- the painted area -------------------------------------------

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Defs>
 
-  <!-- The visible trims: a border strip, its corner and the double-rail
-       runner. 1×1 non-edifice buildings that dress the floor without owning
+  <!-- The visible trims: a border strip, its corner, the inside corner, the
+       double-rail runner, the end cap and the frame. 1×1 non-edifice
+       buildings that dress the floor without owning
        the cell, so they coexist with furniture (only edifices wipe edifices)
        and with any terrain, ours or another mod's. Stuffable and paintable.
 
@@ -27,14 +28,18 @@
     <graphicData>
       <texPath>NeatEdges/Trim/FloorBorderEdge</texPath>
       <graphicClass>Graphic_Multi</graphicClass>
-      <!-- Overdraw kills the joint shimmer: each piece is its own quad, and at
-           shared quad edges the sampler resolves the two edge-texel columns
-           differently as the camera moves, a hairline seam that colour-shifts
-           with scrolling (play, 2026-08-01). Drawing 4% past the tile covers
-           every joint with a neighbour's stable interior texels; identical art
-           overlapping identically is invisible. Square on purpose (the
-           east/west drawSize swap). check_trims.py models it. -->
-      <drawSize>(1.04,1.04)</drawSize>
+      <!-- Exactly one tile. Each piece is its own quad, so a joint is two
+           quads meeting at a tile boundary and only as clean as each
+           texture's outermost texels. The game's static atlas packs textures
+           with no gutter, which filtered every trim's edge against whatever
+           texture sat beside it there: a hairline at each joint that shifted
+           colour as the camera moved (play, 2026-08-01). The trims drew 4%
+           oversize to hide it until 2026-10-06, which only moved the line onto
+           the neighbouring piece. Patch_TrimAtlas now keeps these textures out
+           of the atlas and clamps their edges, so each piece ends on its own
+           art. Square on purpose (the east/west drawSize swap).
+           check_trims.py composes at this size. -->
+      <drawSize>(1,1)</drawSize>
     </graphicData>
     <uiIconPath>NeatEdges/Trim/FloorBorder_MenuIcon</uiIconPath>
     <rotatable>true</rotatable>
@@ -104,8 +109,8 @@
     <graphicData>
       <texPath>NeatEdges/Trim/FloorBorderCorner</texPath>
       <graphicClass>Graphic_Multi</graphicClass>
-      <!-- Same 4% overdraw as the straight, same reason. -->
-      <drawSize>(1.04,1.04)</drawSize>
+      <!-- Exactly one tile, as the straight, for the same reason. -->
+      <drawSize>(1,1)</drawSize>
     </graphicData>
     <rotatable>true</rotatable>
     <defaultPlacingRot>South</defaultPlacingRot>
@@ -159,6 +164,77 @@
     </modExtensions>
   </ThingDef>
 
+  <!-- The inside corner: the square a line of strips leaves open where it
+       turns around an inside corner, a wall jutting into the room. Each strip
+       runs its own tile's full length, so the two on the tiles beside the
+       corner meet only at a point and leave a band's width of square open in
+       the tile between them. This fills it, carrying both strips' bands on and
+       joining them. Chiral like the corner, so all four facings ship, and the
+       facing names the corner the same way: north is the north-east square.
+
+       NO BlocksTerrainFade, on purpose. It covers a corner of its tile, not an
+       edge, and that corner is already sealed by the two strips beside it:
+       corner sealing closes a diagonal whose corner point a neighbour's
+       hardened edge closes. The extension with an empty list would be worse
+       than none, since empty means all four edges.
+
+       Costs a fraction of a strip, being a band's width square. -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorderInsideCorner</defName>
+    <label>floor border inside corner</label>
+    <description>The small square that completes a border where it turns around an inside corner, such as a wall jutting into the room. Border strips each run their own tile's full length, so two meeting around an inside corner leave a notch between them; this fills it and joins them. Rotate to choose which corner. It keeps no edge crisp by itself, since the strips on either side already do. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderInsideCorner</texPath>
+      <graphicClass>Graphic_Multi</graphicClass>
+      <!-- Exactly one tile, as the straight: its bands run on into the
+           neighbours' at two of its edges, and meet them at the tile
+           boundary. Square on purpose. -->
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <!-- The texture alone is a small square in one corner, a few pixels on a
+         menu button; the icon draws the whole bend it completes. -->
+    <uiIconPath>NeatEdges/Trim/FloorBorderInsideCorner_MenuIcon</uiIconPath>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>20</MaxHitPoints>
+      <WorkToBuild>50</WorkToBuild>
+      <Beauty>0</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>1</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2062</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+  </ThingDef>
+
   <!-- The runner: both opposite edges in one piece, `| |`, or `=` turned a
        quarter. Drag it down a corridor and the floor between the rails reads
        as a runner.
@@ -188,9 +264,9 @@
     <graphicData>
       <texPath>NeatEdges/Trim/FloorBorderDouble</texPath>
       <graphicClass>Graphic_Multi</graphicClass>
-      <!-- Same 4% overdraw as the straight: both rails sit on tile edges, so
-           neighbours in a run overlap identically. Square on purpose. -->
-      <drawSize>(1.04,1.04)</drawSize>
+      <!-- Exactly one tile, as the straight, for the same reason. Square on
+           purpose. -->
+      <drawSize>(1,1)</drawSize>
     </graphicData>
     <uiIconPath>NeatEdges/Trim/FloorBorderDouble_MenuIcon</uiIconPath>
     <rotatable>true</rotatable>
@@ -222,7 +298,7 @@
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
     <drawStyleCategory>Defenses</drawStyleCategory>
     <designationCategory>Floors</designationCategory>
-    <uiOrder>2062</uiOrder>
+    <uiOrder>2063</uiOrder>
     <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
     <building>
       <isEdifice>false</isEdifice>
@@ -240,6 +316,154 @@
         <edges>
           <li>0</li>
           <li>2</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- The end cap: three strips in a U, closing a runner or a path one tile
+       wide. The facing names the CLOSED end, so a cap facing north closes a
+       run that comes up from the south.
+
+       Drawn by the generator's _frame, the corner's joining rules generalised,
+       which check_trims.py proves by redrawing every shipped piece with it.
+       West is authored for the runner's reason: the U is mirror-symmetric in
+       shape but not in light. Priced as three straights, by the runner's
+       rule that the convenient piece is not also the cheap one. -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorderEndCap</defName>
+    <label>floor border end cap</label>
+    <description>Three border strips joined in a U around one tile, closing off the end of a runner or of a path one tile wide. Rotate to choose the closed end. All three edges it covers stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderEndCap</texPath>
+      <graphicClass>Graphic_Multi</graphicClass>
+      <!-- Exactly one tile, as the straight, for the same reason. Square on
+           purpose. -->
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>120</MaxHitPoints>
+      <WorkToBuild>450</WorkToBuild>
+      <Beauty>3</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>6</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2064</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- The facing and the edges either side of it: north hugs W,N,E; east
+             N,E,S; south E,S,W; west S,W,N. Offsets -1, 0 and +1, with -1
+             written as 3. -->
+        <edges>
+          <li>3</li>
+          <li>0</li>
+          <li>1</li>
+        </edges>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- The frame: a strip around all four edges, one framed tile, for a
+       stepping stone or a plinth. It never rotates, so one texture and no
+       facing. rotatable false alone does not stop a Graphic_Single following
+       a rotation that code sets, and a frame turned either way would be lit
+       from the wrong side: drawRotated false stops it spinning, and allowFlip
+       false stops a west rotation mirroring it, which nothing in the engine
+       prevents (GenSpawn leaves a non-rotatable thing's rotation as given).
+       It drags like the straight, so a row or a block of framed tiles is one
+       order. Priced as four straights. -->
+  <ThingDef ParentName="BuildingBase">
+    <defName>NE_FloorBorderFrame</defName>
+    <label>floor border frame</label>
+    <description>A border strip around all four edges of one tile, framing it, for a stepping stone or the base of a statue. All four edges stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
+    <thingClass>Building</thingClass>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderFrame</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <!-- Exactly one tile, as the straight, for the same reason. Square on
+           purpose. -->
+      <drawSize>(1,1)</drawSize>
+      <drawRotated>false</drawRotated>
+      <allowFlip>false</allowFlip>
+    </graphicData>
+    <rotatable>false</rotatable>
+    <altitudeLayer>TerrainScatter</altitudeLayer>
+    <passability>Standable</passability>
+    <pathCost>0</pathCost>
+    <fillPercent>0</fillPercent>
+    <selectable>true</selectable>
+    <noRightClickDraftAttack>true</noRightClickDraftAttack>
+    <destroyable>true</destroyable>
+    <clearBuildingArea>false</clearBuildingArea>
+    <canOverlapZones>true</canOverlapZones>
+    <tradeability>None</tradeability>
+    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
+    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <statBases>
+      <MaxHitPoints>160</MaxHitPoints>
+      <WorkToBuild>600</WorkToBuild>
+      <Beauty>4</Beauty>
+      <Flammability>0.5</Flammability>
+    </statBases>
+    <stuffCategories>
+      <li>Woody</li>
+      <li>Stony</li>
+      <li>Metallic</li>
+    </stuffCategories>
+    <costStuffCount>8</costStuffCount>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <drawStyleCategory>Defenses</drawStyleCategory>
+    <designationCategory>Floors</designationCategory>
+    <uiOrder>2065</uiOrder>
+    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
+    <building>
+      <isEdifice>false</isEdifice>
+      <paintable>true</paintable>
+      <ai_chillDestination>false</ai_chillDestination>
+      <ai_neverTrashThis>true</ai_neverTrashThis>
+      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
+      <canLandGravshipOn>true</canLandGravshipOn>
+    </building>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade">
+        <!-- All four, written out: an empty list means the same, but four
+             explicit edges say it where the next reader looks. -->
+        <edges>
+          <li>0</li>
+          <li>1</li>
+          <li>2</li>
+          <li>3</li>
         </edges>
       </li>
     </modExtensions>
