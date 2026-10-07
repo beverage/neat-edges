@@ -139,7 +139,9 @@ namespace NeatEdges
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// (1) This cell's full edge mask, computed once per cell.
+        /// (1) This cell's render mask, computed once per cell: the layout's
+        /// edge mask, less any corner pin that holds nothing back
+        /// (<see cref="RenderMaskAt"/>).
         ///
         /// The suppression check is first and deliberately cheap — a zero mask
         /// means no substitution and no pinning, so the terrain renders exactly
@@ -151,7 +153,7 @@ namespace NeatEdges
             if (DebugTools_NeatEdges.Suppressed) return 0;
 
             Map map = MapOf(layer);
-            return map == null ? 0 : EdgeMaskAt(cell, map, sectionCache);
+            return map == null ? 0 : RenderMaskAt(cell, map, sectionCache);
         }
 
         /// <summary>
@@ -400,6 +402,177 @@ namespace NeatEdges
         internal static int OwnMaskAt(IntVec3 cell, Map map, OwnMaskCache cache)
         {
             return cache != null ? cache.MaskAt(cell) : ComputeOwnMask(cell, map);
+        }
+
+        // ------------------------------------------------------------------
+        // The render mask: corner pins that hold nothing back are dropped.
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// The mask the renderer consumes: <see cref="EdgeMaskAt"/>, less every
+        /// corner pin that holds nothing back.
+        ///
+        /// EdgeMaskAt decides which corners a layout seals from the markers
+        /// alone, and a pin then darkens that vertex for every fade drawn on the
+        /// cell. That is right on the side a hardened edge protects. It is wrong
+        /// where the vertex carries a fade that never crossed a hardened edge.
+        /// The case that found it: lichen and sand meeting under the end of a
+        /// floor's hardened bottom edge. Sand outranks lichen, so its fade lands
+        /// on the lichen tile from the east, across an edge nobody hardened, and
+        /// the pin (the floor's edge flanks that corner, and the floor's side
+        /// seam closes it) cut the fade off at its top corner. The two grounds
+        /// met in a hard line just under the floor.
+        ///
+        /// A pin is dropped only when that is unambiguous, for every fade that
+        /// reaches the corner: it comes in through an open side whose terrain is
+        /// its own; no open side at the corner is a seam inside this cell's own
+        /// surface, where a lit corner beside a neighbour pinned clean would cut
+        /// the fade off in a straight line; and no hardened edge at the corner
+        /// holds that terrain back, so the fade cannot read as leaking round the
+        /// end of one. A fade that reaches the corner only by the diagonal keeps
+        /// its pin: that spike is what corner sealing is for.
+        ///
+        /// Kept apart from EdgeMaskAt on purpose. That one stays a pure function
+        /// of the marker layout, which is what the harness's mask cases assert;
+        /// this one also reads terrain, and its cases build terrain to read.
+        /// </summary>
+        internal static int RenderMaskAt(IntVec3 cell, Map map, OwnMaskCache cache = null)
+        {
+            int mask = EdgeMaskAt(cell, map, cache);
+            return (mask & AllDiagonals) == 0 ? mask : mask & ~IdlePins(cell, map, mask);
+        }
+
+        // Per-thread scratch for IdlePins, which runs once per cell with a sealed
+        // corner during a section regeneration.
+        [System.ThreadStatic] internal static CellTerrain[] rawScratch;
+        [System.ThreadStatic] internal static CellTerrain[] shownScratch;
+        [System.ThreadStatic] internal static CellTerrain[] fanScratch;
+
+        /// <summary>
+        /// The diagonal bits of <paramref name="mask"/> whose pin holds nothing
+        /// back, by the rule on <see cref="RenderMaskAt"/>.
+        ///
+        /// Replays the patched renderer's view of the eight neighbours. Which
+        /// terrains fade onto this cell at all is vanilla's gate, which the
+        /// patched method evaluates on the neighbour as built, before our
+        /// substitution, with a floor-covering edifice already turned to
+        /// `Underwall`. Which corners each fade lights is the stored array: a
+        /// cardinal match lights itself and both flanking corners, a diagonal
+        /// match only its own.
+        ///
+        /// In that array the cardinals are substituted, but a diagonal is read
+        /// as built. The renderer substitutes every direction whose bit is in
+        /// the mask it is handed, diagonals included, so dropping a pin also
+        /// stops its diagonal being substituted: the question is what lights
+        /// the corner once the pin is gone. Reading the diagonal substituted
+        /// hid it, and a carpet tile beside a painted area lost the pin that
+        /// kept a diagonal sand spike off its corner, because the lichen fading
+        /// in from below looked like the only thing reaching it.
+        /// </summary>
+        internal static int IdlePins(IntVec3 cell, Map map, int mask)
+        {
+            CellTerrain[] raw = rawScratch ?? (rawScratch = new CellTerrain[8]);
+            CellTerrain[] shown = shownScratch ?? (shownScratch = new CellTerrain[8]);
+            CellTerrain[] fans = fanScratch ?? (fanScratch = new CellTerrain[8]);
+
+            TerrainGrid grid = map.terrainGrid;
+            CellTerrain self = CellTerrainAt(cell, map);
+            bool selfFoundation = grid.FoundationAt(cell) != null;
+            int fanCount = 0;
+
+            for (int i = 0; i < 8; i++)
+            {
+                IntVec3 c = cell + GenAdj.AdjacentCellsAroundBottom[i];
+                if (!c.InBounds(map))
+                {
+                    raw[i] = shown[i] = self;
+                    continue;
+                }
+
+                CellTerrain t = CellTerrainAt(c, map);
+                Thing edifice = c.GetEdifice(map);
+                if (edifice != null && edifice.def.coversFloor)
+                {
+                    t.def = TerrainDefOf.Underwall;
+                }
+                raw[i] = t;
+                shown[i] = i % 2 == 0 ? Substitute(t, i, mask) : t;
+
+                if (!t.Equals(self)
+                    && t.def.edgeType != TerrainDef.TerrainEdgeType.Hard
+                    && !selfFoundation && grid.FoundationAt(c) == null
+                    && t.def.renderPrecedence >= self.def.renderPrecedence
+                    && !Contains(fans, fanCount, t))
+                {
+                    fans[fanCount++] = t;
+                }
+            }
+
+            int idle = 0;
+            for (int d = 1; d < 8; d += 2)
+            {
+                if ((mask & (1 << d)) == 0) continue;
+
+                int p = d - 1;
+                int q = (d + 1) % 8;
+                bool lit = false;
+                bool needed = false;
+
+                for (int f = 0; f < fanCount && !needed; f++)
+                {
+                    bool viaP = shown[p].Equals(fans[f]);
+                    bool viaQ = shown[q].Equals(fans[f]);
+                    if (!viaP && !viaQ && !shown[d].Equals(fans[f])) continue;
+
+                    lit = true;
+                    needed = !(viaP || viaQ)
+                        || !SideLetsLight(p, fans[f], self, mask, raw, shown)
+                        || !SideLetsLight(q, fans[f], self, mask, raw, shown);
+                }
+
+                if (lit && !needed) idle |= 1 << d;
+            }
+            return idle;
+        }
+
+        /// <summary>
+        /// Whether one side of a corner lets a fade of <paramref name="fan"/>
+        /// light it.
+        ///
+        /// A hardened side must not be holding that same terrain back, or the
+        /// fade would read as leaking round the end of the edge: the re-lit
+        /// corner that pinning exists for.
+        ///
+        /// An open side must not be this cell's own terrain, unless it is the
+        /// fade's. Across a seam inside one surface, a lit corner beside a
+        /// neighbour pinned clean is a fade cut off in a straight line: the
+        /// taper beside a lone hardened edge, which is why that neighbour's
+        /// corner is sealed. Across a boundary that is already a change of
+        /// terrain, the corner cuts nothing new; that is the lichen tile under a
+        /// painted floor tile, open to the floor above and to the sand beside.
+        /// </summary>
+        internal static bool SideLetsLight(int side, CellTerrain fan, CellTerrain self, int mask,
+            CellTerrain[] raw, CellTerrain[] shown)
+        {
+            if ((mask & (1 << side)) != 0) return !raw[side].Equals(fan);
+            return shown[side].Equals(fan) || !shown[side].Equals(self);
+        }
+
+        /// <summary>A cell's terrain exactly as the renderer builds it.</summary>
+        internal static CellTerrain CellTerrainAt(IntVec3 c, Map map)
+        {
+            TerrainGrid grid = map.terrainGrid;
+            return new CellTerrain(grid.TerrainAt(c), c.IsPolluted(map),
+                map.snowGrid.GetDepth(c), c.GetSandDepth(map), grid.ColorAt(c));
+        }
+
+        internal static bool Contains(CellTerrain[] items, int count, CellTerrain t)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (items[i].Equals(t)) return true;
+            }
+            return false;
         }
 
         internal static int BaseMaskAt(IntVec3 cell, Map map, OwnMaskCache cache = null)

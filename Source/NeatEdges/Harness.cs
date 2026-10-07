@@ -141,6 +141,10 @@ namespace NeatEdges
             Guard("mask.twoSided", () => CaseHardeningIsTwoSided(map));
             Guard("mask.cornerSeal", () => CaseOutsideCornerSeals(map));
             Guard("mask.stacking", () => CaseStackingCombines(map));
+            Guard("render.junction", () => CaseJunctionCornerLit(map));
+            Guard("render.junctionZone", () => CaseJunctionZoneOnly(map));
+            Guard("render.relight", () => CaseRelightPinKept(map));
+            Guard("render.taper", () => CaseTaperPinKept(map));
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("area.designators", CaseAreaDesignatorsRegistered);
@@ -242,6 +246,50 @@ namespace NeatEdges
             Spawned.Clear();
 
             Find.CurrentMap?.areaManager?.AllAreas.RemoveAll(a => a is Area_HardEdges);
+            Unpaint(Find.CurrentMap);
+        }
+
+        /// <summary>Terrain a case painted, with what was there before.</summary>
+        internal static readonly Dictionary<IntVec3, TerrainDef> Painted = new Dictionary<IntVec3, TerrainDef>();
+
+        /// <summary>
+        /// Paint a rectangle, remembering each cell's first terrain so
+        /// <see cref="Clear"/> can put it back. The render-mask cases read terrain,
+        /// so terrain is a fixture like any marker.
+        /// </summary>
+        internal static void Paint(Map map, CellRect rect, TerrainDef def)
+        {
+            foreach (IntVec3 c in rect)
+            {
+                if (!Painted.ContainsKey(c)) Painted[c] = map.terrainGrid.TerrainAt(c);
+                map.terrainGrid.SetTerrain(c, def);
+            }
+        }
+
+        internal static void Unpaint(Map map)
+        {
+            if (map != null)
+            {
+                foreach (KeyValuePair<IntVec3, TerrainDef> cell in Painted)
+                {
+                    map.terrainGrid.SetTerrain(cell.Key, cell.Value);
+                }
+            }
+            Painted.Clear();
+        }
+
+        /// <summary>
+        /// A floor-covering edifice turns its cell into `Underwall` for the
+        /// renderer, which would change what a terrain case is testing.
+        /// </summary>
+        internal static bool Covered(Map map, CellRect rect)
+        {
+            foreach (IntVec3 c in rect)
+            {
+                Thing edifice = c.GetEdifice(map);
+                if (edifice != null && edifice.def.coversFloor) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -457,6 +505,166 @@ namespace NeatEdges
             Place(map, c, Single, Rot4.East);
             Place(map, c, Single, Rot4.South);
             Place(map, c, Single, Rot4.West);
+        }
+
+        // ---- the render mask: pins that hold nothing back ----------------
+
+        internal static TerrainDef Terrain(string defName) =>
+            DefDatabase<TerrainDef>.GetNamedSilentFail(defName);
+
+        /// <summary>
+        /// Two grounds meeting under the end of a floor's hardened edge, the
+        /// junction the preview card caught. Steel tile on the two rows above,
+        /// lichen-covered soil below on the west and sand on the east, and the
+        /// two floor tiles over the junction hardened on their south edges.
+        ///
+        /// Sand outranks lichen, so sand fades onto the lichen tile from the
+        /// east, across an edge nobody hardened. The layout seals that tile's
+        /// top-east corner (the floor edge above flanks it), and the render mask
+        /// must not pin it: lit, the sand fade meets the sand tile beside it;
+        /// pinned, the two grounds met in a hard line under the floor. The floor
+        /// tile above keeps its corner pin, because sand reaches that corner only
+        /// by the diagonal, and that spike is what its hardened edge is for.
+        /// </summary>
+        internal static void CaseJunctionCornerLit(Map map)
+        {
+            if (!PaintJunction(map, "render.junction", out IntVec3 o)) return;
+            Place(map, new IntVec3(o.x, 0, o.z + 1), Single, Rot4.South);
+            Place(map, new IntVec3(o.x + 1, 0, o.z + 1), Single, Rot4.South);
+
+            IntVec3 ground = o;
+            IntVec3 floorAbove = new IntVec3(o.x, 0, o.z + 1);
+            const int ne = 1 << 5, se = 1 << 7;
+
+            int layout = Patch_SidedFadeBlock.EdgeMaskAt(ground, map);
+            Check((layout & ne) != 0, "render.junction.layoutSeals",
+                $"the layout mask should still seal the lichen tile's NE (the premise); got {Show(layout)}");
+
+            int render = Patch_SidedFadeBlock.RenderMaskAt(ground, map);
+            Check((render & ne) == 0, "render.junction.groundCornerLit",
+                $"the lichen tile's NE is still pinned: render mask {Show(render)}");
+
+            int above = Patch_SidedFadeBlock.RenderMaskAt(floorAbove, map);
+            Check((above & se) != 0, "render.junction.floorCornerKept",
+                $"the floor tile's SE lost its pin: render mask {Show(above)}");
+            Clear();
+        }
+
+        /// <summary>
+        /// The same junction hardened by the east floor tile alone, as a painted
+        /// tile hardens it: its west and south edges, nothing on the west floor
+        /// tile. The lichen tile's corner must still be lit. And the west floor
+        /// tile keeps its corner pin even though lichen now fades onto it from
+        /// below, through an open side, and reaches that corner too: sand sits
+        /// on the diagonal, and dropping the pin would let its spike onto the
+        /// floor. The first version of the render mask lost exactly this pin,
+        /// because it read the diagonal as substituted and so never saw the sand.
+        /// </summary>
+        internal static void CaseJunctionZoneOnly(Map map)
+        {
+            if (!PaintJunction(map, "render.junctionZone", out IntVec3 o)) return;
+            IntVec3 eastFloor = new IntVec3(o.x + 1, 0, o.z + 1);
+            Place(map, eastFloor, Single, Rot4.West);
+            Place(map, eastFloor, Single, Rot4.South);
+
+            IntVec3 ground = o;
+            IntVec3 westFloor = new IntVec3(o.x, 0, o.z + 1);
+            const int ne = 1 << 5, se = 1 << 7;
+
+            int render = Patch_SidedFadeBlock.RenderMaskAt(ground, map);
+            Check((render & ne) == 0, "render.junctionZone.groundCornerLit",
+                $"the lichen tile's NE is still pinned: render mask {Show(render)}");
+
+            int beside = Patch_SidedFadeBlock.RenderMaskAt(westFloor, map);
+            Check((beside & se) != 0, "render.junctionZone.floorCornerKept",
+                $"the west floor tile's SE lost its pin, so sand's diagonal spike reaches it: render mask {Show(beside)}");
+            Clear();
+        }
+
+        /// <summary>
+        /// The junction's terrain: steel tile on the two rows above, lichen-covered
+        /// soil below on the west and sand on the east, meeting under the seam
+        /// between the two floor tiles at <paramref name="o"/> + north and its east
+        /// neighbour. False, with a skip recorded, when the case cannot be built.
+        /// </summary>
+        internal static bool PaintJunction(Map map, string name, out IntVec3 o)
+        {
+            o = Origin(map);
+            TerrainDef floor = Terrain("MetalTile"), lichen = Terrain("MossyTerrain"), sand = Terrain("Sand");
+            if (Single == null || floor == null || lichen == null || sand == null)
+            {
+                Skip(name, "a def is missing");
+                return false;
+            }
+            if (sand.renderPrecedence <= lichen.renderPrecedence)
+            {
+                Skip(name, "sand no longer outranks lichen, so the fade runs the other way");
+                return false;
+            }
+
+            Clear();
+            CellRect block = CellRect.FromLimits(o.x - 2, o.z - 2, o.x + 3, o.z + 2);
+            if (Covered(map, block)) { Skip(name, "an edifice covers the fixture"); return false; }
+
+            Paint(map, CellRect.FromLimits(o.x - 2, o.z + 1, o.x + 3, o.z + 2), floor);
+            Paint(map, CellRect.FromLimits(o.x - 2, o.z - 2, o.x, o.z), lichen);
+            Paint(map, CellRect.FromLimits(o.x + 1, o.z - 2, o.x + 3, o.z), sand);
+            return true;
+        }
+
+        /// <summary>
+        /// The corner pinning was built for keeps its pin. A steel tile in
+        /// soil, hardened on its south edge: soil also lies to its east, through
+        /// an open side, and would re-light the south edge's end. The terrain
+        /// the hardened edge holds back is the same terrain, so the pin stays.
+        /// </summary>
+        internal static void CaseRelightPinKept(Map map)
+        {
+            TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil");
+            if (Single == null || floor == null || soil == null) { Skip("render.relight", "a def is missing"); return; }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 2, o.z - 2, o.x + 2, o.z + 2);
+            if (Covered(map, block)) { Skip("render.relight", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.SingleCell(o), floor);
+            Place(map, o, Single, Rot4.South);
+
+            int render = Patch_SidedFadeBlock.RenderMaskAt(o, map);
+            int expected = (1 << 0) | (1 << 1) | (1 << 7);   // S, SW, SE
+            Check(render == expected, "render.relight.kept",
+                $"got {Show(render)}, expected {Show(expected)}");
+            Clear();
+        }
+
+        /// <summary>
+        /// The neighbour's taper keeps its pin too. Two steel tiles in soil,
+        /// only the east one hardened on its south edge: the west tile's shared
+        /// corner is sealed so its soft fade tapers out before the hard edge
+        /// starts. Its open side at that corner is clean floor, not soil, so
+        /// lighting the corner would put soil against the hardened tile.
+        /// </summary>
+        internal static void CaseTaperPinKept(Map map)
+        {
+            TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil");
+            if (Single == null || floor == null || soil == null) { Skip("render.taper", "a def is missing"); return; }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 3, o.z - 2, o.x + 2, o.z + 2);
+            if (Covered(map, block)) { Skip("render.taper", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.FromLimits(o.x - 1, o.z, o.x, o.z), floor);
+            Place(map, o, Single, Rot4.South);
+
+            IntVec3 west = o + IntVec3.West;
+            int render = Patch_SidedFadeBlock.RenderMaskAt(west, map);
+            Check(render == (1 << 7), "render.taper.kept",
+                $"west tile got {Show(render)}, expected only SE");
+            Clear();
         }
 
         // ---- the visible trims ------------------------------------------
