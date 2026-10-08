@@ -83,6 +83,10 @@ with a load error, and your floors and terrain are untouched.
 Other mods can make their own decorations harden edges too, through the same
 extension the trims carry, with no dependency on this one beyond a `MayRequire`.
 
+## Status
+
+Live on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3815430443).
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
