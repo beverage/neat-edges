@@ -10,11 +10,10 @@ Each check exists because something broke that way, or because the failure is
 silent in game — which is worse, since the symptom then arrives as a player's
 screenshot rather than a red line.
 
-Ported from the sibling mod that already ran these. Two checks are adapted
-rather than copied, because this repository has a different shape: there is no
-keyed language file here yet, and no Workshop preview until first publish.
-Both adapt by activating when the shape changes rather than by being deleted,
-so neither can be added later without its check waking up.
+Ported from the sibling mod that already ran these. Three checks were written
+to wake up when the repository grew the thing they guard, rather than being
+left out until then: the keyed language file, the Workshop preview and the
+Patches/ tree. All three exist now, so all three run.
 """
 
 import os
@@ -118,10 +117,8 @@ def check_hot_reload():
 # no log line, so a key that exists in code but not in the XML renders as the
 # raw key on the player's screen and nothing anywhere says so.
 #
-# This mod ships no Languages/ tree yet — its player-facing strings are all in
-# defs. So the check is conditional rather than absent: the moment someone
-# writes a .Translate() call, the missing keyed file becomes the failure it
-# would be in any other repo, instead of this check quietly not applying.
+# Written before this mod had a keyed file, so a missing file is itself a
+# failure the moment anything calls .Translate().
 def check_translation_keys():
     used = {}
     for path in cs_files():
@@ -319,10 +316,8 @@ def check_home_paths():
 # ModContentPack.LoadPatches discards EVERY operation in a file whose root is
 # not exactly <Patch>, with one log line as the only symptom. The engine walks
 # Patches/ with SearchOption.AllDirectories, so this must recurse too.
-#
-# This mod ships no Patches/ today — it reaches other mods' terrain through
-# Harmony, not PatchOperations. The walk is kept because the first compat patch
-# is exactly the moment the trap is live and nobody is thinking about it.
+# Patches/NeatEdges_Designators.xml, which puts the area tools on the Zone tab,
+# is the one file it guards today.
 def check_patch_roots():
     patches = os.path.join(ROOT, "Patches")
     if not os.path.isdir(patches):
@@ -336,6 +331,37 @@ def check_patch_roots():
             if root != "Patch":
                 fail("patch-root", "%s root is <%s> — must be <Patch>, or every "
                      "operation in the file is silently discarded" % (rel(path), root))
+
+
+# ------------------------------------------------------------ release contents
+
+# Two lists decide what a player installs: publish-workshop.sh stages the
+# Workshop copy from its CONTENT allowlist, and the CI release job copies the
+# GitHub zip from its own. Each looks complete on its own, so only comparing
+# them catches a gap. One shipped: Patches/ and Languages/ joined the mod and
+# the allowlist but never the zip, so the v1.0.1 zip put no area tools on the
+# Zone tab and had none of the strings the C# shows.
+PUBLISH_SCRIPT = os.path.join(ROOT, "devtools", "publish-workshop.sh")
+CI_WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
+
+
+def check_release_contents():
+    staged = re.search(r"^CONTENT=\(([^)]*)\)$",
+                       open(PUBLISH_SCRIPT, encoding="utf-8").read(), re.M)
+    zipped = re.search(r"cp -R (.+) dist/NeatEdges/$",
+                       open(CI_WORKFLOW, encoding="utf-8").read(), re.M)
+    if not staged or not zipped:
+        fail("release-contents", "could not find %s — the check has lost its "
+             "anchor, so the two lists are no longer compared"
+             % ("CONTENT=(...) in " + rel(PUBLISH_SCRIPT) if not staged
+                else "the zip's cp -R line in " + rel(CI_WORKFLOW)))
+        return
+    workshop, github = set(staged.group(1).split()), set(zipped.group(1).split())
+    if workshop != github:
+        fail("release-contents", "the Workshop copy and the GitHub zip ship "
+             "different things: only the Workshop has %s, only the zip has %s"
+             % (", ".join(sorted(workshop - github)) or "nothing",
+                ", ".join(sorted(github - workshop)) or "nothing"))
 
 
 # -------------------------------------------------------------- harness gating
@@ -406,6 +432,7 @@ def main():
     check_xml_bindings()
     check_preview()
     check_patch_roots()
+    check_release_contents()
     check_private_tracking_refs()
     check_home_paths()
     check_harness_gating()
