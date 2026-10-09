@@ -83,6 +83,19 @@ with a load error, and your floors and terrain are untouched.
 Other mods can make their own decorations harden edges too, through the same
 extension the trims carry, with no dependency on this one beyond a `MayRequire`.
 
+They can also draw trims the way Neat Edges draws its own: one strip texture
+laid out as geometry, rather than a texture for every shape and facing. Give the
+def `NeatEdges.Graphic_StripTrim` as its graphic class and a strip as its
+texture, add a `NeatEdges.TrimPiece` extension naming the shape (`Straight`,
+`Corner`, `InsideCorner`, `Runner`, `EndCap` or `Frame`), and give it a
+`uiIconPath`, or its build button shows the strip. The strip's top half is the
+band as it sits on a north edge and its bottom half the band on a south edge,
+each a quarter tile deep. Along the band it repeats at whatever length keeps
+its texels square, which is once a tile for
+`Textures/NeatEdges/Trim/FloorBorderStrip.png` at 256 × 128. Where two bands
+meet they are cut at 45 degrees. Built trims that share a strip draw in one
+call per map section, whatever their material or paint.
+
 ## Status
 
 Live on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3815430443).

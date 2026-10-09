@@ -36,7 +36,7 @@ Warning: removing Perspective: Paths on its own is not safe as it adds its zone 
 
 Works with any floor from any mod, keeps Dub's Paint Shop colors, and works alongside vanilla bridges. Requires Harmony. You can add it to a running save, but before removing it, use Clear hard edge area on every map you painted. A save that still holds the area loses the map's whole area list, home area included, and clearing the last painted tile removes the area itself. Markers and borders can stay; RimWorld drops each one with a load error, and floors and terrain are untouched.
 
-Other mods can make their own decorations harden edges through the extension the floor borders carry, with no dependency beyond a MayRequire.
+Other mods can make their own decorations harden edges through the extension the floor borders carry, with no dependency beyond a MayRequire. They can also draw their own trims the way the floor borders are drawn, from one strip texture laid out as geometry, through the graphic class and shape extension the borders use.
 
 Recommended with:
 · Flooring Floors. Neat Edges provides borders, but no floors of its own, and this mod adds hundreds, in all materials, and expands on its limited set of border pieces.

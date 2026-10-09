@@ -428,84 +428,129 @@ A border strip, its corner, the inside corner, a double-rail runner, an end cap
 and a frame: 1×1 non-edifice buildings at a floor-covering altitude that dress
 a cell without owning it, so they coexist with any terrain, with furniture and
 with each other. Stuffable and paintable. Each but the inside corner carries
-`BlocksTerrainFade` for the edges its art covers, so a decorated strip is also
-a hard edge, by the same two-sided, corner-sealing rules as the invisible
+`BlocksTerrainFade` for the edges its bands run along, so a decorated strip is
+also a hard edge, by the same two-sided, corner-sealing rules as the invisible
 marker.
 
 They began in Fine Establishments and moved here on 2026-09-24, because what
 makes a trim more than decoration is this mod's mechanism. The art came with
-them: `devtools/make_trim_art.py` is that mod's drawing code, and it writes the
-same PNGs byte for byte. Their defNames took this mod's `NE_` prefix on the
-way; the saves that held the old names were patched once by a script in Fine
-Establishments' devtools, since a compatibility shim is for players of a
-published mod and that one was never published.
+them: `devtools/make_trim_art.py` is that mod's drawing code. Until 2026-10 it
+wrote a texture for every shape and facing, the same PNGs byte for byte; now it
+writes one strip, and the drawings stay as the reference the strip is checked
+against. Their defNames took this mod's `NE_` prefix on the way; the saves that
+held the old names were patched once by a script in Fine Establishments'
+devtools, since a compatibility shim is for players of a published mod and
+that one was never published.
 
 - **The border hugs one edge and rotates to pick which.** A centred linked band
   was built first and rejected in play: a link mask can never say which side
   its wall is on, so an edge-hugging piece has to rotate instead of link.
-- **The corner is one rotatable def with four explicit textures.** The piece is
-  chiral (a mirrored east would duplicate the south corner), and owning both
-  bands in one image is what lets them join cleanly: two separate strips never
-  can, since neither texture knows the other.
-- **Every facing that rotates is authored.** The engine mirrors east for a
-  missing west, which flips the absolute lighting: the lit lip lands on the
-  shaded side. The runner and the end cap authored their west from the start
-  for that reason. The straight was left to the mirror, on the belief that a
-  flipped right-edge strip *is* a left-edge strip, which is true of its shape
-  and not of its light: once the joints were otherwise clean (2026-10-06), its
-  lip visibly stepped wherever a west straight met a corner or an inside
-  corner, both lit the right way. It authors its west now too.
-  `check_trims.py` requires every authored file, and the harness fails a
-  mirrored west (`trims.atlas.*`).
+- **The corner is one rotatable def owning both bands.** Two separate strips
+  cannot join cleanly, since neither knows the other is there; one piece meets
+  its two bands in a mitre on the diagonal.
 - **Two straights at different rotations stack on one cell**, by the same
   rotation-equality rule as the markers (§3). The runner exists for the
-  ergonomics, a corridor's two rails in one drag, and so one image owns both
+  ergonomics, a corridor's two rails in one drag, and so one piece owns both
   rails. It costs double, so the convenient route is not also the cheap one.
-- **All of them draw at exactly one tile, from textures kept out of the static
-  atlas.** RimWorld packs small building textures into a static atlas edge to
-  edge, with no gutter, and builds mipmaps and compresses the sheet as a
-  whole, so the outermost texels of an atlased quad are filtered against
-  whichever texture sits beside it there. Art that stops short of its edges
-  never shows it. A trim's bands run to the edge by design, so every joint
-  carried a hairline of a neighbour's colour, often green or teal, that
-  changed as the camera moved. The trims first hid it with a 4% overdraw
-  (`drawSize 1.04`), which only moved the line 2% onto the neighbouring piece,
-  where it drew on top: a thin line across the band at every joint, worst at
-  the inside corners, whose transparent neighbours darkened it. Since
-  2026-10-06 `Patch_TrimAtlas` keeps the trims' textures out of the atlas and
-  clamps their edges, so a piece's last texel is its own, and a joint is two
-  textures meeting at a tile boundary, which the art makes continuous. It is a
-  prefix on `GlobalTextureAtlasManager.TryInsertStatic`, applied from the mod
-  class's constructor, because every def offers its textures to the atlas
-  before any static constructor runs; Faster Game Loading can defer that until
-  well after startup, and the prefix catches that too. The cost is that a map
-  section draws trims in a batch per texture and colour instead of in the
-  atlas's one. The harness pins all of it (`trims.atlas.*`): not atlased,
-  clamped, one tile, and no mirrored west.
+- **Every trim draws from one strip, laid out as geometry** (since 2026-10,
+  `Graphic_StripTrim`). `FloorBorderStrip.png` is the straight's band at
+  256 × 128: the top half is the band on a north edge, the bottom half the band
+  on a south edge. A shape is the set of edges it draws a band along, an arm
+  each — the straight one, the corner two adjacent, the runner two opposite, the
+  end cap three, the frame four — and each arm is a quad a quarter tile deep, cut
+  at 45° where a neighbouring arm is present. The inside corner is the band
+  square at one corner, split on its diagonal. Along a band, U comes from world
+  position, so a run of trims is one strip carried across every joint; each
+  grid line and side starts it at its own offset, invisible on ours, whose band
+  does not change along its length, but a strip with a pattern along it would
+  otherwise repeat in step on every parallel run. Altitude follows the engine's
+  `PrintPlane`, which raises a plane's north edge 0.01 above its south.
+- **The strip's halves carry the light.** North and west arms take the top
+  half, south and east the bottom, so light falls from the north-west on every
+  shape at every rotation with nothing drawn per facing. The per-facing
+  textures had to earn that one file at a time: the engine mirrors east for a
+  missing west, which flips the light and puts the lit lip on the shaded side.
+  The runner and the end cap authored their west from the start. The straight
+  was left to the mirror, on the belief that a flipped right-edge strip *is* a
+  left-edge strip, which is true of its shape and not of its light: on
+  2026-10-06 its lip visibly stepped wherever a west straight met a corner, and
+  it authored its west too, which made 21 textures. The strip has no facing to
+  get wrong.
+- **The strip never enters the static atlas, and nothing patches it out.**
+  RimWorld packs small building textures into a static atlas edge to edge,
+  with no gutter, and builds mipmaps and compresses the sheet as a whole, so
+  the outermost texels of an atlased quad are filtered against whichever
+  texture sits beside it there. A trim's bands run to the edge by design, so
+  every joint carried a hairline of a neighbour's colour, often green or teal,
+  that changed as the camera moved. A 4% overdraw (`drawSize 1.04`) only moved
+  the line onto the neighbouring piece, where it drew on top. From 2026-10-06,
+  `Patch_TrimAtlas`, a prefix on `GlobalTextureAtlasManager.TryInsertStatic`
+  applied from the mod class's constructor, kept the per-facing textures out
+  and clamped them. `Graphic_StripTrim` keeps the base
+  `Graphic.TryInsertIntoAtlas`, which is empty, so the strip never asks to go
+  in, and the patch and the mod class went with the per-facing textures. The
+  strip repeats along its band and is clamped across it, so a band's outer row
+  never blends with the other half's.
+- **A map section draws all its trims in one call.** A section draws one mesh
+  per material (`MapDrawLayer.GetSubMesh` keys on it). Built trims print on one
+  white material with their stuff or paint colour in the vertex colours, the
+  trick the engine uses for every atlased building, so wood, stone, steel and
+  paint share one mesh. Blueprints and the placement ghost print on their own
+  material, which carries their shader and colour. Measured on 24 pieces, every
+  shape at every rotation in one section: 21 draw calls with the per-facing
+  textures, 24 in mixed stuff and paint, and 1 on the strip either way. What
+  goes up is geometry: mitred arms draw more vertices, 216 for those 24 pieces
+  against 96.
+- **The geometry exists twice and is pinned.** `StripTrimGeometry` in C# draws
+  it, and `devtools/strip_trim.py` renders it for `check_trims.py`. Both must
+  reproduce `devtools/strip_trim_geometry.txt`, every vertex and UV of every
+  shape at every rotation at one cell, chosen so every value is a whole number
+  of 1/4096 and float and double agree exactly.
+- **A mitre is the only change from the drawn art.** `check_trims.py` renders
+  every shape from the strip, a texel to a pixel, and compares it with the
+  drawing it replaced. The straight and the runner are identical. At each
+  mitred corner three squares of 2×2 texels differ: the outer corner, where a
+  lit lip and a shaded one now meet on the diagonal instead of one overlapping
+  the other; the groove crossing, which the drawings darkened by laying both
+  grooves over it; and the inner lip corner, which they left as plain fill.
+  Anything else differing fails the check.
 - **The inside corner fills the notch strips cannot.** A strip runs its own
   tile's full length, so where a line turns around an inside corner (a wall
   jutting into the room) the strips on the two tiles beside the corner meet
   only at a point, and a band's width of square in the tile between them is
-  left open. The inside corner is that square, carrying both strips' keylines,
-  grooves and inner lips on and joining them; its other two sides are joints,
-  so they have no lip. It hardens nothing: it covers a corner, not an edge, and
-  corner sealing already closes that corner from the two strips beside it.
-  Chiral, so four facings, named for the corner as the corner piece's are.
+  left open. The inside corner is that square, split on its diagonal, each half
+  the band of the strip it continues, so their keylines, grooves and inner lips
+  run on and join. It hardens nothing: it covers a corner, not an edge, and
+  corner sealing already closes that corner from the two strips beside it. Its
+  rotation names the corner, as the corner piece's does.
 - **A runner turning a corner is two pieces on one tile**: a corner for the
   outer rails and an inside corner for the inner joint. Neither is an edifice,
   so the engine lets them share the tile at every stage: blueprint placement
   refuses only the same def at the same rotation, and spawning wipes only an
   edifice with an edifice. The harness pins it (`trims.stack.*`).
-- **The end cap and the frame are drawn by `_frame`**, the corner's joining
-  rules generalised to any set of edges: one fill union, keylines that stop at
-  a crossing band's inner edge, grooves that run into each other and stop,
-  bevels lit by their final side. Two adjacent edges through `_frame` are the
-  corner, pixel for pixel, and so are the straight and the runner; the sheet
-  fails if that ever stops being true, which is what makes a new shape a member
-  of the family rather than a lookalike. The end cap's facing names its closed
-  end; its west is authored for the runner's reason. The frame never rotates,
-  so it is one texture, with `drawRotated false` because `rotatable false`
-  alone does not stop a `Graphic_Single` spinning when code sets a rotation.
+- **The end cap and the frame are arms like the rest**, three and four. Their
+  reference drawings come from `_frame`, the corner's joining rules generalised
+  to any set of edges: one fill union, keylines that stop at a crossing band's
+  inner edge, grooves that run into each other and stop, bevels lit by their
+  final side. Two adjacent edges through `_frame` are the corner's drawing pixel
+  for pixel, and one edge or two opposite are the straight's and the runner's;
+  the check fails if that stops being true, which is what keeps a new shape a
+  member of the family rather than a lookalike. The end cap's rotation names its
+  closed end. The frame never rotates and needs nothing to stop it: four arms
+  draw the same whatever rotation code gives it, each taking the half for the
+  edge it lands on.
+- **A trim's shape is read through blueprints.** The engine generates a
+  blueprint def for each buildable def and copies the graphic, class included,
+  but not the extensions, so `TrimPiece.For` looks through `entityDefToBuild` to
+  the def being built. The ghost (`GhostUtility.GhostGraphicFor`) keeps the
+  class too, on the EdgeDetect shader. Every trim names a `uiIconPath`: without
+  one the build button takes the graphic's texture, which is now the strip.
 - **Price follows the bands**, the runner's rule: the end cap costs three
   strips and the frame four, and the inside corner, a band's width square, a
   fraction of one.
+- **Other mods can draw trims the same way.** A def opts in with the graphic
+  class `NeatEdges.Graphic_StripTrim`, a strip of the same layout as its
+  texture, and a `NeatEdges.TrimPiece` naming the shape. Those three are a
+  public contract from v1.1.0: the class name, the `shape` values and the strip
+  layout stay as they are. The harness pins each one as the mod's own trims use
+  it (`trims.render.*`, `trims.geometry`, `trims.strip.*`).

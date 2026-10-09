@@ -148,7 +148,10 @@ namespace NeatEdges
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("trims.stack", () => CaseTrimStack(map));
-            Guard("trims.atlas", CaseTrimAtlas);
+            Guard("trims.render", CaseTrimRender);
+            Guard("trims.geometry", CaseStripGeometry);
+            Guard("trims.strip", () => CaseStripTrim(map));
+            Guard("trims.cost", () => CaseTrimCost(map));
             Guard("area.designators", CaseAreaDesignatorsRegistered);
             Guard("overlay.icon", CaseOverlayIcon);
             Guard("area.equalsFourEdges", () => CaseAreaEqualsFourEdges(map));
@@ -689,25 +692,45 @@ namespace NeatEdges
         internal const string InsideCorner = "NE_FloorBorderInsideCorner";
 
         /// <summary>
+        /// Each trim's shape, rows following TrimNames. Written out rather than
+        /// read from the defs, so a def naming the wrong shape fails here.
+        /// </summary>
+        internal static readonly TrimPiece.Kind[] TrimShapes =
+        {
+            TrimPiece.Kind.Straight, TrimPiece.Kind.Corner, TrimPiece.Kind.InsideCorner,
+            TrimPiece.Kind.Runner, TrimPiece.Kind.EndCap, TrimPiece.Kind.Frame,
+        };
+
+        /// <summary>
         /// Every trim loads stuffable and paintable, and every one but the
         /// inside corner carries the extension. A trim missing it is decoration
         /// and nothing more, and nothing in game would say so; the inside
-        /// corner carrying it would harden a whole tile it only touches.
+        /// corner carrying it would harden a whole tile it only touches. Each
+        /// names its shape, and has a menu icon of its own: without one the
+        /// engine takes the graphic's texture, and the button would show the
+        /// strip.
         /// </summary>
         internal static void CaseTrimDefs()
         {
-            foreach (string name in TrimNames)
+            for (int i = 0; i < TrimNames.Length; i++)
             {
+                string name = TrimNames[i];
                 ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
                 bool wantExtension = name != InsideCorner;
                 bool hasExtension = def?.GetModExtension<BlocksTerrainFade>() != null;
+                TrimPiece piece = def?.GetModExtension<TrimPiece>();
+                Texture strip = def?.graphic?.MatSingle?.mainTexture;
+                bool iconOwn = def?.uiIcon != null && def.uiIcon != BaseContent.BadTex && def.uiIcon != strip;
                 bool ok = def != null && def.MadeFromStuff
                     && def.building != null && def.building.paintable
-                    && hasExtension == wantExtension;
+                    && hasExtension == wantExtension
+                    && piece != null && piece.shape == TrimShapes[i] && iconOwn;
                 Check(ok, "trims.defs." + name,
                     def == null ? "missing"
                         : $"stuff {def.MadeFromStuff}, paintable {def.building?.paintable}, "
-                          + $"extension {hasExtension} (want {wantExtension})");
+                          + $"extension {hasExtension} (want {wantExtension}), "
+                          + $"shape {piece?.shape.ToString() ?? "none"} (want {TrimShapes[i]}), "
+                          + $"icon {def.uiIcon?.name ?? "none"}{(iconOwn ? "" : ", not its own")}");
             }
         }
 
@@ -715,11 +738,11 @@ namespace NeatEdges
         /// Each trim hardens exactly the edges its art covers, at every
         /// rotation. The expected edges are written out rather than computed
         /// from the production formula, so a wrong offset in either the defs
-        /// or the formula fails here instead of agreeing with itself. They
-        /// come from the textures: the border's band sits in the north margin
-        /// of _north; the corner's north facing covers N and E; the runner's
-        /// covers N and S; the end cap's covers W, N and E; the frame covers
-        /// all four whatever its rotation; the inside corner covers no edge.
+        /// or the formula fails here instead of agreeing with itself. They are
+        /// the edges each shape draws a band along: facing north, the border's
+        /// is N; the corner's N and E; the runner's N and S; the end cap's W,
+        /// N and E; the frame's all four whatever its rotation; the inside
+        /// corner's none, since it covers a corner.
         ///
         /// Adjacency indices: S=0, W=2, N=4, E=6. Rows follow TrimNames.
         /// </summary>
@@ -818,64 +841,480 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// Every trim draws at exactly one tile, from its own texture, clamped,
-        /// with every facing authored. Each is part of what keeps a joint
-        /// clean, and losing any one is silent in game, where the symptom is a
-        /// hairline at a joint or a step in a lip:
+        /// Every trim draws from the strip, at exactly one tile, repeating along
+        /// its band and clamped across it, and outside the static atlas with no
+        /// patch keeping it there. Each is part of what keeps a joint clean, and
+        /// losing any one is silent in game:
         ///
-        ///   - in the static atlas (the prefix not applied, or no longer
-        ///     recognising our textures), a joint borrows a hairline from
-        ///     whatever texture the packer put beside the trim;
-        ///   - wrapping rather than clamping, an edge texel blends with the
-        ///     texture's opposite edge, which is transparent on most pieces;
-        ///   - drawn larger than its tile, a piece overlaps its neighbour again
-        ///     and whichever draws last shows its own edge on top;
-        ///   - a west facing mirrored from east is lit from the wrong side, the
-        ///     step the straight showed until its west was authored.
+        ///   - in the static atlas, a strip could not repeat, and a joint would
+        ///     borrow a hairline from whatever texture the packer put beside it;
+        ///   - clamped along the band, a run would smear its last texel column
+        ///     instead of carrying the strip on;
+        ///   - wrapping across, a band's outer row would blend with the other
+        ///     half's;
+        ///   - drawn larger than its tile, a piece would overlap its neighbour.
+        ///
+        /// Nothing of ours may patch the atlas door any more: the strip never
+        /// knocks, and a patch there would run for every texture at startup.
         /// </summary>
-        internal static void CaseTrimAtlas()
+        internal static void CaseTrimRender()
         {
-            Check(Patch_TrimAtlas.applied, "trims.atlas.patchApplied",
-                "the TryInsertStatic prefix did not apply");
-            Rot4[] rots = { Rot4.North, Rot4.East, Rot4.South, Rot4.West };
+            bool atlasDoor = HarmonyLib.Harmony.GetAllPatchedMethods()
+                .Where(m => m.Name == nameof(GlobalTextureAtlasManager.TryInsertStatic)
+                    && m.DeclaringType == typeof(GlobalTextureAtlasManager))
+                .Any(m => HarmonyLib.Harmony.GetPatchInfo(m)?.Owners.Contains(HarmonyInit.Id) == true);
+            Check(!atlasDoor, "trims.render.atlasUnpatched",
+                "a Neat Edges patch sits on GlobalTextureAtlasManager.TryInsertStatic again");
+
             foreach (string name in TrimNames)
             {
                 ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
-                if (def?.graphic == null) { Skip("trims.atlas." + name, "def or graphic missing"); continue; }
+                if (def?.graphic == null) { Skip("trims.render." + name, "def or graphic missing"); continue; }
 
                 var problems = new List<string>();
+                if (!(def.graphic is Graphic_StripTrim))
+                {
+                    problems.Add("draws with " + def.graphic.GetType().Name);
+                }
                 if (def.graphicData.drawSize != Vector2.one)
                 {
                     problems.Add("drawSize " + def.graphicData.drawSize);
                 }
-                if (def.graphic.WestFlipped)
+                if (!(def.graphic.MatSingle?.mainTexture is Texture2D texture))
                 {
-                    problems.Add("west is mirrored from east");
+                    problems.Add("no texture");
                 }
-                foreach (Rot4 rot in rots)
+                else
                 {
-                    string facing = rot.ToStringHuman() + ": ";
-                    if (!(def.graphic.MatAt(rot).mainTexture is Texture2D texture))
+                    if (texture.wrapModeU != TextureWrapMode.Repeat || texture.wrapModeV != TextureWrapMode.Clamp)
                     {
-                        problems.Add(facing + "no texture");
-                        continue;
-                    }
-                    if (!Patch_TrimAtlas.IsTrimTexture(texture))
-                    {
-                        problems.Add(facing + "not recognised as a trim texture");
+                        problems.Add("wraps " + texture.wrapModeU + " along and " + texture.wrapModeV + " across");
                     }
                     if (GlobalTextureAtlasManager.TryGetStaticTile(def.category.ToAtlasGroup(), texture, out _,
                             ignoreFoundInOtherAtlas: true))
                     {
-                        problems.Add(facing + "in the static atlas");
-                    }
-                    if (texture.wrapMode != TextureWrapMode.Clamp)
-                    {
-                        problems.Add(facing + "wraps " + texture.wrapMode);
+                        problems.Add("in the static atlas");
                     }
                 }
-                Check(problems.Count == 0, "trims.atlas." + name, string.Join("; ", problems.Distinct()));
+                Check(problems.Count == 0, "trims.render." + name, string.Join("; ", problems));
             }
+        }
+
+        /// <summary>
+        /// The geometry the game draws equals the geometry check_trims.py
+        /// renders from, vertex for vertex. Both are pinned to one golden file,
+        /// devtools/strip_trim_geometry.txt: every shape at every rotation at
+        /// cell (3, 5), with a strip that repeats once a tile, as x z u v times
+        /// 4096. Every one of those values is a whole number there, so float and
+        /// double agree exactly. check_trims.py fails if the Python model drifts
+        /// from the file; this fails if the C# does. A deliberate change
+        /// regenerates the file (strip_trim.py --write-golden) and changes both.
+        /// </summary>
+        internal static void CaseStripGeometry()
+        {
+            ModContentPack pack = LoadedModManager.RunningModsListForReading
+                .FirstOrDefault(m => m.assemblies.loadedAssemblies.Contains(typeof(Harness).Assembly));
+            string path = pack == null ? null : Path.Combine(pack.RootDir, "devtools", "strip_trim_geometry.txt");
+            if (path == null || !File.Exists(path))
+            {
+                Skip("trims.geometry", "no devtools/strip_trim_geometry.txt beside the mod");
+                return;
+            }
+            string[] golden = File.ReadAllLines(path).Where(line => line.Length > 0).ToArray();
+
+            string[] rotations = { "North", "East", "South", "West" };
+            var mine = new List<string>();
+            foreach (TrimPiece.Kind shape in TrimShapes)
+            {
+                for (int r = 0; r < 4; r++)
+                {
+                    var verts = new List<Vector3>();
+                    var uvs = new List<Vector3>();
+                    var colors = new List<Color32>();
+                    var tris = new List<int>();
+                    StripTrimGeometry.Append(verts, uvs, colors, tris, shape, new Rot4(r), new IntVec3(3, 0, 5),
+                        Vector3.zero, new Color32(255, 255, 255, 255), 1f);
+                    var values = new List<string>();
+                    for (int i = 0; i < verts.Count; i++)
+                    {
+                        values.Add(Scaled(verts[i].x));
+                        values.Add(Scaled(verts[i].z));
+                        values.Add(Scaled(uvs[i].x));
+                        values.Add(Scaled(uvs[i].y));
+                    }
+                    mine.Add(shape + " " + rotations[r] + " " + string.Join(" ", values));
+                }
+            }
+            int first = Enumerable.Range(0, Math.Max(mine.Count, golden.Length))
+                .FirstOrDefault(i => i >= mine.Count || i >= golden.Length || mine[i] != golden[i]);
+            bool same = mine.Count == golden.Length && mine.SequenceEqual(golden);
+            Check(same, "trims.geometry",
+                same ? "" : $"line {first + 1}: game \"{(first < mine.Count ? mine[first] : "(none)")}\", "
+                    + $"file \"{(first < golden.Length ? golden[first] : "(none)")}\"");
+        }
+
+        internal static string Scaled(float value) =>
+            ((long)Math.Round(value * 4096.0)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // ---- what the trims cost to draw ---------------------------------
+
+        /// <summary>A measurement: printed in the report, counted as nothing.</summary>
+        internal static void Note(string name, string detail)
+        {
+            Report.AppendLine("  INFO  " + name + " — " + detail);
+        }
+
+        internal static readonly Rot4[] Rots = { Rot4.North, Rot4.East, Rot4.South, Rot4.West };
+
+        /// <summary>
+        /// Measures what the trims cost the renderer, and asserts what the strip
+        /// renderer promises: one texture on the map, and ONE draw call per
+        /// section for every layout here, whatever the materials, the paint or
+        /// whether they are blueprints. Until 2026-10 the same layouts took 21,
+        /// 24 and 21. It names no trim graphic class and no patch, so the same
+        /// case reads the same numbers off whatever the trims are drawn with,
+        /// which is how that before was measured.
+        ///
+        /// A map section is one mesh per material (MapDrawLayer.GetSubMesh keys
+        /// on the Material), and each submesh is one Graphics.DrawMesh a frame,
+        /// so the submeshes a section's things layer holds for trim textures are
+        /// the trims' draw calls in that section. Two layouts, each inside one
+        /// section and unfogged (SectionLayer_Things skips fogged things): every
+        /// shape at every rotation, and runs of straights at every rotation.
+        /// Each is measured in one stuff, in three stuffs with every fourth
+        /// piece painted, and as blueprints.
+        /// </summary>
+        internal static void CaseTrimCost(Map map)
+        {
+            List<ThingDef> defs = TrimNames.Select(n => DefDatabase<ThingDef>.GetNamedSilentFail(n)).ToList();
+            ThingDef straight = defs[0];
+            if (defs.Any(d => d?.graphic == null))
+            {
+                Skip("trims.cost", "a trim def or its graphic is missing");
+                return;
+            }
+
+            // Every texture a trim draws on the map, read off the graphics
+            // themselves, so the set is right whatever class draws them.
+            var drawn = new HashSet<Texture>();
+            foreach (ThingDef def in defs)
+            {
+                foreach (Rot4 rot in Rots)
+                {
+                    if (def.graphic.MatAt(rot)?.mainTexture is Texture texture) drawn.Add(texture);
+                }
+            }
+            ModContentPack pack = LoadedModManager.RunningModsListForReading
+                .FirstOrDefault(m => m.assemblies.loadedAssemblies.Contains(typeof(Harness).Assembly));
+            List<Texture2D> folder = pack == null ? new List<Texture2D>()
+                : pack.GetContentHolder<Texture2D>().GetAllUnderPath("NeatEdges/Trim/").ToList();
+            List<Texture2D> onMap = drawn.OfType<Texture2D>().ToList();
+            Note("trims.cost.textures",
+                $"{folder.Count} loaded from Trim/, {folder.Sum(TextureBytes):N0} bytes; "
+                + $"{onMap.Count} drawn on the map, {onMap.Sum(TextureBytes):N0} bytes ("
+                + string.Join(", ", onMap.GroupBy(Describe).Select(g => g.Count() + " × " + g.Key)) + ")");
+            Check(onMap.Count == 1, "trims.cost.oneTexture",
+                $"{onMap.Count} textures drawn on the map: " + string.Join(", ", onMap.Select(t => t.name)));
+
+            List<System.Reflection.MethodBase> ours = HarmonyLib.Harmony.GetAllPatchedMethods()
+                .Where(m => HarmonyLib.Harmony.GetPatchInfo(m)?.Owners.Contains(HarmonyInit.Id) == true)
+                .ToList();
+            bool atlasDoor = ours.Any(m => m.Name == nameof(GlobalTextureAtlasManager.TryInsertStatic)
+                && m.DeclaringType == typeof(GlobalTextureAtlasManager));
+            Note("trims.cost.harmony", $"{ours.Count} methods patched by {HarmonyInit.Id}; "
+                + "the texture atlas door " + (atlasDoor ? "is" : "is not") + " one of them");
+
+            Section section = map.mapDrawer.SectionAt(Origin(map));
+            CellRect rect = section.CellRect;
+            var pieces = new List<(ThingDef def, IntVec3 cell, Rot4 rot)>();
+            for (int s = 0; s < defs.Count; s++)
+            {
+                for (int r = 0; r < Rots.Length; r++)
+                {
+                    pieces.Add((defs[s], new IntVec3(rect.minX + 1 + 2 * s, 0, rect.minZ + 1 + 2 * r), Rots[r]));
+                }
+            }
+            var straights = new List<(ThingDef def, IntVec3 cell, Rot4 rot)>();
+            for (int r = 0; r < Rots.Length; r++)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    straights.Add((straight, new IntVec3(rect.minX + 1 + i, 0, rect.minZ + 10 + r), Rots[r]));
+                }
+            }
+
+            ThingDef[] stuffs =
+            {
+                GenStuff.DefaultStuffFor(straight), ThingDefOf.BlocksGranite, ThingDefOf.Steel,
+            };
+            ColorDef paint = DefDatabase<ColorDef>.AllDefs.FirstOrDefault(c => c.colorType == ColorType.Structure);
+
+            bool measured = true;
+            foreach ((string layoutName, var layout) in new[] { ("pieces", pieces), ("straights", straights) })
+            {
+                foreach (string variant in new[] { "oneStuff", "mixed", "blueprints" })
+                {
+                    Clear();
+                    for (int i = 0; i < layout.Count; i++)
+                    {
+                        (ThingDef def, IntVec3 cell, Rot4 rot) = layout[i];
+                        ThingDef stuff = variant == "mixed" ? stuffs[i % stuffs.Length] : stuffs[0];
+                        map.fogGrid.Unfog(cell);
+                        if (variant == "blueprints")
+                        {
+                            Spawned.Add(GenConstruct.PlaceBlueprintForBuild(def, cell, map, rot, Faction.OfPlayer, stuff));
+                            continue;
+                        }
+                        Thing thing = ThingMaker.MakeThing(def, stuff);
+                        thing.SetFactionDirect(Faction.OfPlayer);
+                        Spawned.Add(GenSpawn.Spawn(thing, cell, map, rot));
+                        if (variant == "mixed" && i % 4 == 3 && paint != null)
+                        {
+                            ((Building)thing).ChangePaint(paint);
+                        }
+                    }
+
+                    SectionLayer layer = section.GetLayer(typeof(SectionLayer_ThingsGeneral));
+                    section.RegenerateSingleLayer(layer);
+                    int calls = 0;
+                    int verts = 0;
+                    foreach (LayerSubMesh sub in layer.subMeshes)
+                    {
+                        if (!sub.finalized || sub.disabled || sub.verts.Count == 0) continue;
+                        if (sub.material == null || !drawn.Contains(sub.material.mainTexture)) continue;
+                        calls++;
+                        verts += sub.verts.Count;
+                    }
+                    measured &= calls > 0;
+                    Note($"trims.cost.{layoutName}.{variant}",
+                        $"{layout.Count} pieces: {calls} draw call(s), {verts} vertices");
+                    Check(calls == 1, $"trims.cost.oneCall.{layoutName}.{variant}",
+                        $"{calls} draw calls for {layout.Count} pieces");
+                }
+            }
+            Clear();
+            Check(measured, "trims.cost.measured",
+                "a layout printed no trim submeshes at all, so its numbers above measure nothing");
+        }
+
+        // ---- the strip renderer ------------------------------------------
+
+        /// <summary>
+        /// Trims drawn from a strip by Graphic_StripTrim. Everything a
+        /// per-facing Graphic_Multi gets for free has to hold here with no
+        /// Harmony: the ghost and the blueprint keep the class, Copy still finds
+        /// a designator, paint and stuff colour reach the vertices, and every
+        /// edge samples the half of the strip that keeps the light coming from
+        /// the north-west.
+        /// </summary>
+        internal static void CaseStripTrim(Map map)
+        {
+            List<ThingDef> strips = TrimNames.Select(n => DefDatabase<ThingDef>.GetNamedSilentFail(n))
+                .Where(d => d?.graphic is Graphic_StripTrim).ToList();
+            if (strips.Count == 0)
+            {
+                Skip("trims.strip", "no trim draws from a strip");
+                return;
+            }
+
+            foreach (ThingDef def in strips)
+            {
+                var graphic = (Graphic_StripTrim)def.graphic;
+                TrimPiece piece = TrimPiece.For(def);
+                var problems = new List<string>();
+                if (piece == null) problems.Add("no TrimPiece");
+                if (!graphic.Tinted) problems.Add("prints on " + graphic.mat?.shader?.name + ", so not in one call");
+
+                if (!(def.blueprintDef?.graphic is Graphic_StripTrim blueprint))
+                {
+                    problems.Add("blueprint draws with " + def.blueprintDef?.graphic?.GetType().Name);
+                }
+                else
+                {
+                    // The queue the blueprint def asks for, which vanilla sets to
+                    // 2950 and another mod may change; the wall's blueprint is
+                    // the vanilla control, drawn by Graphic_Single. Ours must
+                    // honour the request as theirs does, whatever the number.
+                    int asked = def.blueprintDef.graphicData.renderQueue;
+                    int wall = ThingDefOf.Wall.blueprintDef?.graphic?.MatSingle?.renderQueue ?? -1;
+                    Note("trims.strip.blueprintQueue",
+                        $"ours {blueprint.mat.renderQueue}, def asks {asked}, vanilla wall blueprint {wall}");
+                    if (blueprint.mat.renderQueue != asked && blueprint.mat.renderQueue != wall)
+                        problems.Add($"blueprint render queue {blueprint.mat.renderQueue}, def asks {asked}, wall's {wall}");
+                    if (blueprint.Tinted) problems.Add("blueprint prints its colour into the vertices");
+                    if (TrimPiece.For(def.blueprintDef)?.shape != piece?.shape) problems.Add("blueprint resolves no shape");
+                }
+
+                Graphic ghost = GhostUtility.GhostGraphicFor(def.graphic, def, new Color(0.5f, 1f, 0.6f, 0.4f));
+                if (!(ghost is Graphic_StripTrim ghostStrip))
+                {
+                    problems.Add("ghost draws with " + ghost?.GetType().Name);
+                }
+                else
+                {
+                    if (ghostStrip.mat.shader != ShaderTypeDefOf.EdgeDetect.Shader) problems.Add("ghost shader " + ghostStrip.mat.shader?.name);
+                    foreach (Rot4 rot in Rots)
+                    {
+                        Bounds bounds = ghostStrip.MeshFor(piece?.shape ?? TrimPiece.Kind.Straight, rot).bounds;
+                        if (bounds.size.x <= 0f || bounds.min.x < -0.501f || bounds.max.x > 0.501f
+                            || bounds.min.z < -0.501f || bounds.max.z > 0.501f)
+                        {
+                            problems.Add($"ghost mesh {rot.ToStringHuman()} spans {bounds.min} to {bounds.max}");
+                        }
+                    }
+                }
+
+                Designator_Build copy = BuildCopyCommandUtility.FindAllowedDesignator(def);
+                if (copy == null || copy.PlacingDef != def) problems.Add("Copy finds no designator for it");
+
+                Check(problems.Count == 0, "trims.strip." + def.defName, string.Join("; ", problems));
+            }
+
+            CaseStripLight();
+
+            ThingDef straight = strips.FirstOrDefault(d => TrimPiece.For(d)?.shape == TrimPiece.Kind.Straight);
+            if (straight == null)
+            {
+                Skip("trims.strip.paint", "no straight draws from a strip");
+                return;
+            }
+            CaseStripPaint(map, straight);
+        }
+
+        /// <summary>
+        /// Each edge samples the right half of the strip, the right way up. The
+        /// top half is the band on a north edge, lit lip outermost; the bottom
+        /// half is the band on a south edge, shaded lip outermost. So a north or
+        /// west band reads the top half with its outer edge at the strip's top
+        /// row (V 1), and a south or east band the bottom half with its outer
+        /// edge at the bottom row (V 0). Written out per rotation rather than
+        /// computed, so a wrong rule fails here instead of agreeing with itself.
+        /// Along the band, one tile must span a whole number of repeats.
+        /// </summary>
+        internal static void CaseStripLight()
+        {
+            // rotation: which axis is depth, the outer and inner coordinate on
+            // it, and V at each.
+            var expected = new (Rot4 rot, bool depthOnZ, float outer, float inner, float outerV, float innerV)[]
+            {
+                (Rot4.North, true, 0.5f, 0.25f, 1f, 0.5f),
+                (Rot4.East, false, 0.5f, 0.25f, 0f, 0.5f),
+                (Rot4.South, true, -0.5f, -0.25f, 0f, 0.5f),
+                (Rot4.West, false, -0.5f, -0.25f, 1f, 0.5f),
+            };
+            const float period = 1f / 64f;
+            foreach (var want in expected)
+            {
+                var verts = new List<Vector3>();
+                var uvs = new List<Vector3>();
+                var colors = new List<Color32>();
+                var tris = new List<int>();
+                StripTrimGeometry.Append(verts, uvs, colors, tris, TrimPiece.Kind.Straight, want.rot,
+                    new IntVec3(37, 0, 81), Vector3.zero, new Color32(255, 255, 255, 255), period);
+                var problems = new List<string>();
+                if (verts.Count != 4 || uvs.Count != 4 || colors.Count != 4 || tris.Count != 6)
+                {
+                    problems.Add($"{verts.Count} verts, {uvs.Count} uvs, {colors.Count} colours, {tris.Count} indices");
+                }
+                for (int i = 0; i < verts.Count && i < uvs.Count; i++)
+                {
+                    float depth = want.depthOnZ ? verts[i].z : verts[i].x;
+                    float v = uvs[i].y;
+                    if (Mathf.Abs(depth - want.outer) < 1e-4f && Mathf.Abs(v - want.outerV) > 1e-4f)
+                        problems.Add($"outer vertex V {v}, want {want.outerV}");
+                    else if (Mathf.Abs(depth - want.inner) < 1e-4f && Mathf.Abs(v - want.innerV) > 1e-4f)
+                        problems.Add($"inner vertex V {v}, want {want.innerV}");
+                    else if (Mathf.Abs(depth - want.outer) >= 1e-4f && Mathf.Abs(depth - want.inner) >= 1e-4f)
+                        problems.Add($"vertex at depth {depth}, off the band");
+                }
+                float span = uvs.Count == 0 ? 0f : uvs.Max(u => u.x) - uvs.Min(u => u.x);
+                if (Mathf.Abs(span - 1f / period) > 1e-3f) problems.Add($"one tile spans {span} repeats, want {1f / period}");
+                Check(problems.Count == 0, "trims.strip.light." + want.rot.ToStringHuman(), string.Join("; ", problems));
+            }
+        }
+
+        /// <summary>
+        /// Two straights side by side, one painted: they print into ONE
+        /// submesh, the painted one's colour carried in its vertices, and the
+        /// submesh's lists stay in step (a vertex without its UV or colour would
+        /// skew every trim printed after it in the section). Unpainting gives
+        /// the trim back its stuff's colour.
+        /// </summary>
+        internal static void CaseStripPaint(Map map, ThingDef straight)
+        {
+            ColorDef paint = DefDatabase<ColorDef>.AllDefs.FirstOrDefault(c => c.colorType == ColorType.Structure);
+            if (paint == null)
+            {
+                Skip("trims.strip.paint", "no structure paint colour loaded");
+                return;
+            }
+            Clear();
+            Section section = map.mapDrawer.SectionAt(Origin(map));
+            CellRect rect = section.CellRect;
+            IntVec3 a = new IntVec3(rect.minX + 2, 0, rect.minZ + 2);
+            IntVec3 b = a + IntVec3.East;
+            map.fogGrid.Unfog(a);
+            map.fogGrid.Unfog(b);
+            Place(map, a, straight, Rot4.North);
+            Place(map, b, straight, Rot4.North);
+            Thing plain = Spawned[Spawned.Count - 2];
+            var painted = (Building)Spawned[Spawned.Count - 1];
+            painted.ChangePaint(paint);
+
+            SectionLayer layer = section.GetLayer(typeof(SectionLayer_ThingsGeneral));
+            section.RegenerateSingleLayer(layer);
+            Texture strip = ((Graphic_StripTrim)straight.graphic).mat.mainTexture;
+            List<LayerSubMesh> ours = layer.subMeshes
+                .Where(s => s.finalized && !s.disabled && s.material?.mainTexture == strip).ToList();
+            var colours = new HashSet<Color32>(ours.SelectMany(s => s.colors));
+            Color32 plainColour = plain.DrawColor;
+            Color32 paintColour = paint.color;
+            Check(ours.Count == 1 && colours.Contains(plainColour) && colours.Contains(paintColour),
+                "trims.strip.paintSharesOneCall",
+                $"{ours.Count} submesh(es); colours {string.Join(", ", colours)}; want {plainColour} and {paintColour}");
+
+            bool inStep = ours.All(s => s.verts.Count == s.uvs.Count && s.verts.Count == s.colors.Count
+                && s.tris.Count % 3 == 0 && s.tris.All(t => t < s.verts.Count));
+            Check(inStep, "trims.strip.listsInStep",
+                string.Join("; ", ours.Select(s => $"{s.verts.Count} verts, {s.uvs.Count} uvs, {s.colors.Count} colours, {s.tris.Count} indices")));
+
+            painted.ChangePaint(null);
+            Graphic after = painted.Graphic;
+            Check(after is Graphic_StripTrim && after.color == plain.Graphic.color, "trims.strip.unpaintRestores",
+                $"{after?.GetType().Name} in {after?.color}, want {plain.Graphic.color}");
+            Clear();
+        }
+
+        internal static string Describe(Texture2D texture) =>
+            $"{texture.format} {texture.width}x{texture.height}, {texture.mipmapCount} mips";
+
+        /// <summary>
+        /// Bytes a texture holds on the GPU, summed over its mip chain. A
+        /// format this does not know reads as zero, and the report shows the
+        /// format, so an odd total is easy to trace.
+        /// </summary>
+        internal static long TextureBytes(Texture2D texture)
+        {
+            long total = 0;
+            for (int i = 0; i < texture.mipmapCount; i++)
+            {
+                long w = Math.Max(1, texture.width >> i);
+                long h = Math.Max(1, texture.height >> i);
+                long blocks = ((w + 3) / 4) * ((h + 3) / 4);
+                switch (texture.format)
+                {
+                    case TextureFormat.DXT1: total += blocks * 8; break;
+                    case TextureFormat.DXT5:
+                    case TextureFormat.BC7: total += blocks * 16; break;
+                    case TextureFormat.RGBA32:
+                    case TextureFormat.ARGB32:
+                    case TextureFormat.BGRA32: total += w * h * 4; break;
+                    case TextureFormat.RGB24: total += w * h * 3; break;
+                    case TextureFormat.Alpha8:
+                    case TextureFormat.R8: total += w * h; break;
+                }
+            }
+            return total;
         }
 
         // ---- the painted area -------------------------------------------

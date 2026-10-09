@@ -214,19 +214,21 @@ namespaces are global across every loaded mod.
 
 **No floors, no terrain.** This mod works with anyone's flooring; shipping its
 own would put it in competition with the mods it exists to serve. Its art is
-the marker's ghost, the two tool icons, the overlay toggle's icon and the six
-trims, all generated. The ghost and the trims are greyscale, so the trims take
+the marker's ghost, the two tool icons, the overlay toggle's icon, and the
+trims' strip and their six menu icons, all generated. The ghost and the strip
+are greyscale, so the trims take
 their stuff's colour and paint like any building. The icons copy the vanilla
 icons they sit among instead (see DEVELOPMENT, Textures): the toggle is pixel
 art matching the toggle row, and the area tools match the Zone tab's area
 tools, vanilla's clear slash included. The tools are stone and soil, never the
 area's cyan: that blue is the home area's in those menus.
 
-**The trims' `edges` are measured from their art.** Rotation names the edge the
-band hugs, with the offsets in the defs (border `[0]`, corner `[0,1]`, runner
-`[0,2]`, end cap `[3,0,1]`, frame all four); the harness pins every rotation
-(`trims.masks.*`). Change the art and both must be re-measured, or a trim
-hardens an edge it does not cover.
+**The trims' `edges` are the arms their shape draws.** Rotation names the edge
+the band hugs, with the offsets in the defs (border `[0]`, corner `[0,1]`,
+runner `[0,2]`, end cap `[3,0,1]`, frame all four), the same offsets
+`StripTrimGeometry` draws arms on. The harness pins every rotation
+(`trims.masks.*`). Change one without the other and a trim hardens an edge it
+does not cover, or draws one it does not harden.
 
 **The inside corner carries no `BlocksTerrainFade`, and must not.** It covers a
 corner of its tile, not an edge, and the strips beside it already seal that
@@ -234,35 +236,51 @@ corner. The extension with an empty list means all four edges, so "adding it
 with nothing in it" would harden a whole tile the piece only touches; the
 harness pins the absence (`trims.defs.*`).
 
-**New trim shapes are drawn by `_frame`, and `_frame` must keep redrawing the
-shipped pieces.** It is the corner's joining rules generalised to any set of
-edges; `check_trims.py` fails the moment it stops reproducing all twelve
-straight, corner and runner facings pixel for pixel. Draw a new shape any
-other way and it stops being provably one of the family.
+**Every trim draws from one strip, and its geometry exists twice.**
+`Graphic_StripTrim` lays `Textures/NeatEdges/Trim/FloorBorderStrip.png` out as
+geometry: a band along each edge the shape covers, cut at 45 degrees where two
+meet, mapped to world position along the band. The geometry is
+`StripTrimGeometry` in C# and `devtools/strip_trim.py` in Python, which
+`check_trims.py` renders from, and both are pinned to
+`devtools/strip_trim_geometry.txt`. The harness's `trims.geometry` fails if the
+C# drifts from it and `check_trims.py` if the Python does. Change both, then
+regenerate the file with `strip_trim.py --write-golden`; never regenerate it to
+make one side pass.
 
-**Authored facings, not mirrored ones.** The straight's, the runner's and the
-end cap's west facings are authored, because the engine's auto-mirror flips
-the absolute lighting: the lit lip lands on the shaded side. The inside corner
-ships all four, being chiral, and the frame never mirrors (`allowFlip false`).
-The straight was the last one mirrored, on the belief that one rail could take
-it, until its lip visibly stepped at every corner it met. Deleting any of those
-files brings the bug back silently; `check_trims.py` fails if one goes missing
-while the art still needs it, and the harness fails a mirrored west.
+**The strip's two halves carry the light.** The top half is the band on a north
+edge, lit lip outermost, and the bottom half the band on a south edge, shaded
+lip outermost. West arms take the top half and east arms the bottom, so the
+light stays north-west on every shape at every rotation with nothing drawn per
+facing; a mirrored facing lit from the wrong side, the bug the old per-facing
+art had to author its way around, cannot happen. The strip is 256 wide although
+four columns hold the band: at four, its small mips compressed to different
+colours and the straight drew up to 8 levels off.
 
-**The trims draw at exactly one tile, from textures kept out of the static
-atlas.** The game packs small building textures into an atlas with no gutter
-between them, so an atlased trim's edge texels are filtered against whatever
-sits beside it there, and every joint shows a hairline of that colour.
-`Patch_TrimAtlas` keeps every texture under `Textures/NeatEdges/Trim/` out of
-the atlas and clamps it, so a piece ends on its own art and a joint is the
-drawing carrying on. It is applied from `NeatEdgesMod`'s constructor, not with
-the rest from `HarmonyInit`: by the time static constructors run, every def
-has already offered its textures to the atlas. So keep trim textures in that
-folder, and keep `drawSize` at one tile: the 4% overdraw the trims used to
-carry only moved the hairline onto the neighbouring piece, and any overdraw
-puts each piece's edge back on top of the next. The harness pins it
-(`trims.atlas.*`); whether a joint LOOKS clean is still a close-zoom capture
-in a running game.
+**The drawings in `make_trim_art.py` are the reference, not shipped art.** The
+strip is cut from the straight's rows, and `check_trims.py` renders every shape
+at every rotation from the strip and compares it with its drawing pixel for
+pixel. The only difference it allows is at each mitre: three squares of 2×2
+texels, the outer corner, the groove crossing and the inner lip corner. So a
+change to a drawing is a change to what players see. `_frame` draws the end cap
+and the frame by the corner's rules, and must keep redrawing the straight,
+corner and runner pixel for pixel; the check fails if it stops.
+
+**The strip never enters the static atlas, and nothing patches the atlas.** The
+class keeps the base `TryInsertIntoAtlas`, which is empty. Inside the atlas the
+strip could not repeat along its band, and its edge texels would be filtered
+against whatever the packer put beside it, the joint hairline a Harmony patch
+existed to stop until 2026-10. Built trims print on one white material with
+their colour in the vertices, as the engine prints every atlased building, so a
+map section draws all its trims in one call; anything on another shader, a
+blueprint or the ghost, keeps its colour on its material. Keep `drawSize` at one
+tile. The harness pins it (`trims.render.*`, `trims.cost.*`); whether a joint
+LOOKS clean is still a close-zoom capture in a running game.
+
+**A trim's shape is read through blueprints.** The engine's generated blueprint
+def copies the graphic, class included, but not the extensions, so
+`TrimPiece.For` looks through `entityDefToBuild` to the def being built. And
+every trim def names a `uiIconPath`: without one the engine takes the graphic's
+texture for the build button, which would be the strip.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this

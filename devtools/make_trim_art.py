@@ -1,47 +1,53 @@
 #!/usr/bin/env python3
-"""The trim pieces' art: the floor border, its mitred corner, the inside
-corner, the double-rail runner, the end cap and the frame, and three menu
-icons. Drawing plus manifest; run it to regenerate.
+"""The trims' art: the strip every trim is drawn from, and six menu icons.
+Drawing plus manifest; run it to regenerate.
 
     python3 devtools/make_trim_art.py
     python3 devtools/check_trims.py
 
 The trims are 1×1 non-edifice buildings carrying a band along one or more
-edges of their cell, rotated to pick which. They moved here from Fine
-Establishments with their art; this is that mod's drawing code, unchanged in
-every pixel.
+edges of their cell, rotated to pick which: the floor border, its corner, the
+inside corner, the double-rail runner, the end cap and the frame. They moved
+here from Fine Establishments with their art.
+
+WHAT SHIPS is one strip, not a texture per shape and facing.
+``Graphic_StripTrim`` lays it out as geometry for each shape
+(``StripTrimGeometry``, mirrored in ``strip_trim.py``): a band along each edge
+the shape covers, cut at 45 degrees where two meet. Until 2026-10 each shape
+shipped a texture per facing, 21 in all, kept out of the game's static atlas
+by a Harmony patch so their joints stayed clean; the strip is never offered to
+the atlas at all.
+
+WHAT STAYS HERE is the drawing of every shape, facing by facing, as it shipped.
+It is the reference: the strip is cut from the runner's rows, and
+``check_trims.py`` renders every shape from the strip and compares it with
+these drawings pixel for pixel, allowing only the corners where a mitre now
+replaces a butt joint. So the light rules below still govern what a player
+sees, and a change here is a change to the strip.
 
 THE BORDER hugs ONE edge, full length, so a row reads as one continuous line.
 It rotates rather than links: the first design was a centred linked band,
 geometrically flawless and wrong, because borders exist to trace edges (wall
-lines, counter feet) and a link mask can never say which edge to hug.
-Graphic_Multi with all four textures. West is authored rather than left to
-the engine's mirror of east: a right-edge strip flipped horizontally is a
-left-edge strip in shape, but its lit lip lands on the inside, the opposite of
-every authored piece it meets, which showed as a step in the lip where a west
-strip met a corner (2026-10-06). Not linked, so no 75% crop, and kept out of
-the game's static atlas (Patch_TrimAtlas): authored pixels are screen truth,
-and the strip must bleed to its tile edge exactly.
+lines, counter feet) and a link mask can never say which edge to hug. The
+light is ABSOLUTE: north and west lips lit, south and east shaded, which is
+why the strip holds two halves, a north band and a south band, and an arm
+takes the half for the edge it ends up on.
 
-THE CORNER owns both bands of an L in one image, which is what makes a clean
-join possible at all: two separate strips can never meet properly, since
-neither texture knows the other. It is chiral, so all four facings ship.
+THE CORNER owns both bands of an L: drawn here with grooves that run into each
+other, and laid out by the renderer as two arms mitred on the diagonal.
 
 THE RUNNER owns both opposite edges (`| |`, or `=` turned a quarter), so a
-corridor gets its two rails from one drag. Four textures, two drawings, and
-west must be AUTHORED rather than mirrored; see ``draw_border_double``.
+corridor gets its two rails from one drag.
 
 THE INSIDE CORNER is the square two strips leave open where a line turns
 around an inside corner: the strips on the two neighbouring tiles meet only at
 a point, a band's width short. It carries both neighbours' bands on and joins
-them. Chiral, so all four facings ship.
+them.
 
 THE END CAP owns three edges (closing a runner or a one-wide path) and THE
 FRAME all four (a single framed tile). Both are drawn by ``_frame``, the
 corner's joining rules generalised to any set of edges; ``check_trims.py``
-proves the generalisation by redrawing every shipped piece with it. The end
-cap's west is authored for the runner's reason; the frame is one texture,
-since it never rotates.
+proves the generalisation by redrawing the straight, corner and runner with it.
 
 Stuffable (Woody/Stony/Metallic) and paintable: greyscale, single-material,
 no mask, which are the colour channels the engine actually supports.
@@ -49,7 +55,7 @@ no mask, which are the colour channels the engine actually supports.
 
 import os
 
-from trim_kit import DARK, HILITE, LIGHT, MOD_ROOT, SHADE, TILE, Canvas
+from trim_kit import DARK, HILITE, LIGHT, MOD_ROOT, SHADE, TILE, Canvas, write_rgba_png
 
 #: Strip width in authored pixels, drawn 1:1 (no atlas crop), so this IS the
 #: on-screen fraction. A quarter tile (60) read far too heavy beside Flooring
@@ -74,7 +80,7 @@ def draw_border_corner(canvas, facing):
 
     Canonical art is the south+west corner; the other three are coordinate
     flips. Facing → corner: south=SW, east=SE, west=NW, north=NE (clockwise
-    cycling; all four textures explicit because the piece is chiral).
+    cycling; the piece is chiral, so every facing is its own drawing).
     """
     size = canvas.final_width
     scale = size / TILE
@@ -263,11 +269,12 @@ def _frame(canvas, edges):
 def draw_border_edge(canvas, facing):
     """The strip hugging one edge, full length. Any of the four facings.
 
-    West ships as its own texture, like the runner's and the end cap's. It was
-    left to the engine's mirror of east until 2026-10-06, on the belief that a
-    single strip could take it; mirrored, the strip's lit lip sits on its
-    inner side, so wherever it met a corner, an inside corner or a cap, all of
-    them lit the other way, the lip stepped at the joint.
+    West is its own drawing, not east mirrored: a mirror puts the lit lip on
+    the strip's inner side, and wherever that met a corner, an inside corner
+    or a cap, all lit the other way, the lip stepped at the joint (seen in
+    play while west was still left to the engine's mirror, 2026-10-06). The
+    strip renderer keeps the rule by construction: every west arm samples the
+    north band's half of the strip.
     """
     if facing not in ("north", "south", "east", "west"):
         raise ValueError(f"unknown facing {facing!r}")
@@ -281,13 +288,9 @@ def draw_border_double(canvas, facing):
     north is south's drawing and west is east's, so four facings cost two
     drawings.
 
-    **West ships EXPLICITLY, and must.** The engine would auto-mirror it from
-    east, and a mirror flips the absolute lighting: the west rail's lit outer
-    lip lands on the east rail's shaded one and vice versa, so a west-rotated
-    runner would be lit from the wrong side and disagree with every other
-    piece in the family. The single strip's west was left to the mirror until
-    2026-10-06, on the belief that one rail could take it; it could not,
-    because it meets pieces lit the right way (see ``draw_border_edge``).
+    West is its own drawing, never east mirrored: a mirror flips the absolute
+    lighting, so the west rail's lit outer lip would land on the east rail's
+    shaded one and vice versa (see ``draw_border_edge``).
 
     Two opposite bands never touch (each is ``BAND + EDGE`` deep against a 256
     tile), so drawing order does not matter and the bed between them stays
@@ -318,9 +321,8 @@ END_CAP_EDGES = {
 def draw_border_end_cap(canvas, facing):
     """Three strips in a U: the end of a runner, or of a one-wide path.
 
-    All four facings ship. The U is mirror-symmetric in shape but not in
-    light: mirrored, its lit lips land on the shaded side, the runner's
-    reason for an authored west.
+    Every facing is its own drawing. The U is mirror-symmetric in shape but
+    not in light: mirrored, its lit lips would land on the shaded side.
     """
     if facing not in END_CAP_EDGES:
         raise ValueError(f"unknown facing {facing!r}")
@@ -328,7 +330,7 @@ def draw_border_end_cap(canvas, facing):
 
 
 def draw_border_frame(canvas):
-    """A strip around all four edges: one framed tile. One texture, because
+    """A strip around all four edges: one framed tile. One drawing, because
     the piece never rotates, so there is nothing to mirror and no facing."""
     _frame(canvas, ("north", "east", "south", "west"))
 
@@ -392,15 +394,51 @@ def draw_border_inside_corner(canvas, facing):
                     alpha=110 if lit else 120)
 
 
+#: The strip Graphic_StripTrim lays out as geometry, in place of a texture per
+#: facing. Its top half is the band on a north edge and its bottom half the
+#: band on a south edge, each a quarter tile deep at the facings' own 256 rows
+#: to a tile, so every mip level holds the rows the facings' mip levels did.
+#: As wide as the facings it replaces, though the band does not change along
+#: its length and four columns would hold all of it. The game block-compresses
+#: the strip and every level of its mip chain (DXT5 on macOS), and a level
+#: narrower than a 4x4 block compressed to different colours: a 4-wide strip
+#: drew the straight up to 8 levels off the facings at the closest zoom, where
+#: this one draws it within 1 (lab captures, 2026-10-09). At 256 wide every
+#: block, at every level, holds exactly the rows of the matching block in a
+#: north or south facing, so it compresses the same.
+STRIP_WIDTH = 256
+STRIP_HALF = TILE // 4
+
+
+def strip_rows():
+    """The strip's RGBA rows, copied from the runner's north facing.
+
+    That facing is the north band in its top quarter and the south band in its
+    bottom quarter, drawn by ``_band`` exactly as the straight's north and
+    south facings are, so the strip is those two facings' rows and nothing
+    new. A band that varied along its length would need a longer strip, so
+    that is asserted rather than assumed.
+    """
+    canvas = Canvas(TILE)
+    draw_border_double(canvas, "north")
+    rows = canvas._resolve_pixels()
+    kept = rows[:STRIP_HALF] + rows[TILE - STRIP_HALF:]
+    for row in kept:
+        if row != row[:4] * TILE:
+            raise ValueError("a strip row varies along the band; the strip needs more columns")
+    return [row[:STRIP_WIDTH * 4] for row in kept]
+
+
 def draw_border_icon(canvas):
     """Menu icon: the band at full length through the centre.
 
     The band runs edge to edge through the centre because a band hugging the
     icon's edge is exactly what a small menu button loses. It is the button
-    face only: the placement ghost comes from the def's own facings, since
-    the engine builds a ghost from ``uiIconPath`` only for linked graphics and
-    doors (a centred linked band was this piece's first design, which is where
-    an older note here saying otherwise came from).
+    face only: the placement ghost is the def's own graphic, the strip laid
+    out by Graphic_StripTrim, since the engine builds a ghost from
+    ``uiIconPath`` only for linked graphics and doors (a centred linked band
+    was this piece's first design, which is where an older note here saying
+    otherwise came from).
     """
     size = canvas.final_width
     centre = size // 2
@@ -467,21 +505,16 @@ if __name__ == "__main__":
         draw(canvas, *args)
         canvas.save_png(os.path.join(OUT_DIR, f"{stem}.png"))
 
-    # The border: all four facings, west authored (see draw_border_edge).
-    for facing in ("north", "south", "east", "west"):
-        write(f"FloorBorderEdge_{facing}", draw_border_edge, facing)
-    # The corner is chiral, so all four facings ship explicitly.
-    for facing in ("north", "south", "east", "west"):
-        write(f"FloorBorderCorner_{facing}", draw_border_corner, facing)
-    # The runner: four files, two drawings. West is explicit on purpose.
-    for facing in ("north", "south", "east", "west"):
-        write(f"FloorBorderDouble_{facing}", draw_border_double, facing)
-    # The inside corner is chiral like the corner; the end cap's west is
-    # explicit for the runner's reason; the frame never rotates.
-    for facing in ("north", "south", "east", "west"):
-        write(f"FloorBorderInsideCorner_{facing}", draw_border_inside_corner, facing)
-        write(f"FloorBorderEndCap_{facing}", draw_border_end_cap, facing)
-    write("FloorBorderFrame", draw_border_frame)
+    # The strip every trim draws from.
+    write_rgba_png(os.path.join(OUT_DIR, "FloorBorderStrip.png"),
+                   STRIP_WIDTH, 2 * STRIP_HALF, strip_rows())
+    # Menu icons, one per def: a def without one would show the strip itself
+    # on its button. The straight, runner and inside corner draw their own;
+    # the corner, end cap and frame show their default-rotation facing, the
+    # picture their buttons have always had.
     write("FloorBorder_MenuIcon", draw_border_icon)
-    write("FloorBorderDouble_MenuIcon", draw_border_double_icon)
+    write("FloorBorderCorner_MenuIcon", draw_border_corner, "south")
     write("FloorBorderInsideCorner_MenuIcon", draw_border_inside_icon)
+    write("FloorBorderDouble_MenuIcon", draw_border_double_icon)
+    write("FloorBorderEndCap_MenuIcon", draw_border_end_cap, "south")
+    write("FloorBorderFrame_MenuIcon", draw_border_frame)

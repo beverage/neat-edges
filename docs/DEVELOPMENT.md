@@ -133,32 +133,51 @@ rotation spins it, which is what makes `Rotation` name the hugged edge with no
 offset. Change that art and the relationship must be re-measured — the harness
 pins it (`mask.rotation.*`) so an inversion fails loudly.
 
-`make_trim_art.py` draws the six trims: twenty-four PNGs under
-`Textures/NeatEdges/Trim/`, the facings of each piece plus build-menu icons for
-the border, the runner and the inside corner. Every facing that rotates is
-authored: the straight's, the runner's and the end cap's west, because the
-engine's mirror of east would light it from the wrong side, and all four of
-the inside corner's, because it is chiral. The frame is one texture because it
-never rotates (see DESIGN §9). The end cap and the frame are drawn by `_frame`, the
-corner's joining rules generalised to any set of edges. Everything is
-greyscale, so the stuff tints it and paint recolours it. The script came from
-Fine Establishments with the first three trims, and still writes the same bytes
-for them that mod shipped; `trim_kit.py` is the part of that mod's texture kit
-it needs: the canvas, the house greys and the PNG writer.
+`make_trim_art.py` writes seven PNGs under `Textures/NeatEdges/Trim/`: the
+strip every trim draws from, and a build-menu icon for each of the six. The
+strip, `FloorBorderStrip.png`, is 256 × 128: its top half is the straight
+border's north band, row for row, and its bottom half the south band.
+`Graphic_StripTrim` lays it out as geometry, a band along each edge a shape
+covers, cut at 45° where two meet, so a shape is a set of edges rather than a
+texture (see DESIGN §9). The script still draws every shape at every facing,
+as the trims shipped them until 2026-10, but writes none of those drawings to
+disk: they are the reference the strip is checked against. The end cap and the
+frame are drawn by `_frame`, the corner's joining rules generalised to any set
+of edges. Everything is greyscale, so the stuff tints it and paint recolours
+it. The script came from Fine Establishments with the first three trims;
+`trim_kit.py` is the part of that mod's texture kit it needs: the canvas, the
+house greys and the PNG writer, plus a reader for the PNGs it writes.
 
-`check_trims.py` composes the trims on two sheets, at the defs' drawSize
-(exactly one tile), because no trim is ever seen alone. `dist/_trims.png` has the runs:
-a corridor of runners, runners meeting straight borders, east beside west, and
-a run that stops. `dist/_trimshapes.png` has the joins: an inside corner around
-a wall block, a one-wide path capped at both ends, a runner turning a corner
-(a corner and an inside corner stacked on the turning tile), and frames. It
-exits non-zero if the runner's rail drifts off the straight border's, if
-`_frame` stops redrawing any of the twelve shipped straight, corner and runner
-facings pixel for pixel, or if an authored facing goes missing while the art
-still needs it. The sheets cannot show what the game's sampler does at a
-quad's edge; for that, see the joints scene below. The trims' `edges` are measured from this art, so a change
-that moves a band also means re-measuring them; the harness pins every
-rotation (`trims.masks.*`).
+The geometry exists twice: `StripTrimGeometry.cs`, which the game runs, and
+`devtools/strip_trim.py`, which the checks run. Both are pinned to
+`devtools/strip_trim_geometry.txt`, every vertex and UV of every shape at every
+rotation at one cell. `check_trims.py` fails if the Python drifts from it, and
+the harness's `trims.geometry` if the C# does. A deliberate change goes into
+both, and then the file is rewritten:
+
+```bash
+python3 devtools/strip_trim.py --write-golden
+```
+
+`check_trims.py` renders every shape at every rotation from the strip with
+that geometry, a texel to a pixel, and compares each with its drawing. The
+straight and the runner come out identical. A piece with a mitre may differ in
+three 2 × 2 squares at each mitred corner: the outer corner, the groove
+crossing and the inner lip corner, where a butt joint and a mitre draw
+genuinely different texels. A difference anywhere else fails the run, and so
+does the strip no longer being the straight's rows, the runner's rail drifting
+off the straight border's, `_frame` no longer redrawing the twelve straight,
+corner and runner facings pixel for pixel, or anything in the trim folder but
+the strip and the six icons. Then it composes the rendered trims on two
+sheets, at the defs' drawSize (exactly one tile), because no trim is ever seen
+alone. `dist/_trims.png` has the runs: a corridor of runners, runners meeting
+straight borders, east beside west, and a run that stops.
+`dist/_trimshapes.png` has the joins: an inside corner around a wall block, a
+one-wide path capped at both ends, a runner turning a corner (a corner and an
+inside corner stacked on the turning tile), and frames. The sheets cannot show
+what the game's sampler does where two quads meet; for that, see the joints
+scene below. The trims harden the edges their bands run along, and the harness
+pins every rotation (`trims.masks.*`).
 
 A `.dds` beside a PNG silently shadows it with no timestamp check, so a
 regenerated texture can appear not to change. Faster Game Loading writes them
@@ -196,15 +215,17 @@ wood floor hides most of what there is to see.
 | `DebugTools_NeatEdges.cs` | the compare toggle |
 | `Harness.cs` | the regression cases — see [TESTING.md](TESTING.md) |
 | `HarmonyInit.cs` | `PatchAll`, and the startup anchor report |
-| `Patch_TrimAtlas.cs` | keeps the trims' textures out of the static atlas and clamps their edges |
-| `NeatEdgesMod.cs` | the mod class, there only to apply `Patch_TrimAtlas` before any def loads |
+| `Graphic_StripTrim.cs` | draws a trim from the strip: prints built trims into one submesh with their colour in the vertices, and blueprints and the ghost on their own material |
+| `StripTrimGeometry.cs` | the bands, mitres and UVs of each shape, mirrored by `devtools/strip_trim.py` |
+| `TrimPiece.cs` | the extension naming a trim's shape, read through a blueprint to the def it builds |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
 `Patches/NeatEdges_Designators.xml` puts the two area tools on the Zone tab,
 and `Languages/English/Keyed/NeatEdges.xml` holds every string the C# shows a
-player. `devtools/` holds the art generators and the trims' sheet (see
-Textures), the two static checks and the harness runner.
+player. `devtools/` holds the art generators, the trims' geometry model, its
+golden file and their check (see Textures), the two static checks and the
+harness runner.
 
 ## Things that will waste an afternoon
 
