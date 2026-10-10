@@ -163,8 +163,7 @@ upload entry does not exist at all):
 
   1. Enable Harmony and Neat Edges in the mod list and confirm it loads
      clean: exactly ONE Neat Edges entry, no "same packageId multiple times"
-     error, and the startup line "[NeatEdges] terrain edge patch applied ...
-     trims kept out of the texture atlas".
+     error, and the startup line "[NeatEdges] terrain edge patch applied".
   2. TERMINAL, with the game still open at the main menu:
      devtools/publish-workshop.sh strip
      It removes the .dds files the game wrote into the copy while starting,

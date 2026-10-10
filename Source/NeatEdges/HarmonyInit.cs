@@ -14,10 +14,10 @@ namespace NeatEdges
     ///   <see cref="Patch_AreaMigration"/>        answers a save's type lookup for Perspective:
     ///                                            Paths' area, and only when nothing else did
     ///
-    /// One more goes in earlier, from <see cref="NeatEdgesMod"/>'s constructor:
-    /// <see cref="Patch_TrimAtlas"/>, which keeps the trims' textures out of the
-    /// static atlas and has to be in place before the first def's graphic is
-    /// built, long before this runs.
+    /// The trims need no patch: <see cref="Graphic_StripTrim"/> never offers its
+    /// strip to the static atlas. (Until 2026-10 a fifth patch, applied from a
+    /// Mod constructor before any def loaded, kept the per-facing trim textures
+    /// out of it.)
     /// </summary>
     [StaticConstructorOnStartup]
     public static class HarmonyInit
@@ -35,9 +35,7 @@ namespace NeatEdges
             // something a log can be grepped for.
             Log.Message("[NeatEdges] terrain edge patch "
                 + (Patch_SidedFadeBlock.Applied ? "applied" : "NOT APPLIED")
-                + " — " + (Patch_SidedFadeBlock.AnchorReport ?? "transpiler never ran")
-                + "; trims " + (Patch_TrimAtlas.applied ? "kept out of" : "NOT kept out of")
-                + " the texture atlas");
+                + " — " + (Patch_SidedFadeBlock.AnchorReport ?? "transpiler never ran"));
         }
     }
 }

@@ -167,6 +167,39 @@ def drop_stale_dds(png_path):
         os.remove(stale)
 
 
+def read_rgba_png(path):
+    """Read a PNG this kit wrote: 8-bit RGBA, every row filter 0.
+
+    Returns ``(width, height, rows)``, rows as RGBA bytes top to bottom. Not a
+    general decoder: it refuses anything ``write_rgba_png`` would not have
+    produced, rather than misreading it.
+    """
+    data = open(path, "rb").read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path}: not a PNG")
+    pos, idat, width, height = 8, b"", None, None
+    while pos < len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        kind = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, colour = struct.unpack(">IIBB", body[:10])
+            if (depth, colour) != (8, 6):
+                raise ValueError(f"{path}: not 8-bit RGBA")
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + length
+    raw = zlib.decompress(idat)
+    stride = width * 4 + 1
+    rows = []
+    for y in range(height):
+        line = raw[y * stride:(y + 1) * stride]
+        if line[0] != 0:
+            raise ValueError(f"{path}: row {y} uses PNG filter {line[0]}, not one this kit writes")
+        rows.append(bytes(line[1:]))
+    return width, height, rows
+
+
 def write_rgba_png(path, width, height, rows):
     """Write finished RGBA rows as an 8-bit PNG, standard library only.
 

@@ -134,6 +134,14 @@ REQUIRED_TYPES = [
     "Designator_AreaHardEdgesClear",
     "Patch_AreaMigration",
     "PerspectivePathsInterop",
+    # Named by trim defs in XML, ours and other mods'. Neither name contains
+    # the other, which matters: this counts substrings.
+    "Graphic_StripTrim",
+    "TrimPiece",
+    # Given to every trim at startup and building every shape's button; no
+    # XML names them, so nothing else would miss them.
+    "CompTrimJoins",
+    "Designator_TrimShape",
 ]
 
 failures = []

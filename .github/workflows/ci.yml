@@ -25,9 +25,8 @@ jobs:
       # of validation and still show a green tick.
       #
       # Walked from the repo root rather than from a named list of directories,
-      # because this mod has no Patches/ or Languages/ yet and a hardcoded list
-      # would either fail on the missing ones now or silently skip them on the
-      # day they arrive.
+      # because a hardcoded list silently skips a directory added after it was
+      # written. Patches/ and Languages/ both arrived that way.
       - name: XML well-formedness
         shell: bash
         run: |
@@ -38,9 +37,10 @@ jobs:
             -print0 | xargs -0 xmllint --noout
 
       # Hot-reload invariants, translation keys, XML-to-C# type bindings, the
-      # <Patch> root walk, the Workshop preview size, and the two checks that
-      # keep private tracker identifiers, internal vocabulary and absolute home
-      # paths out of a public repository. One script, so the same checks run
+      # <Patch> root walk, the Workshop preview size, the release zip's list
+      # against the Workshop allowlist, and the two checks that keep private
+      # tracker identifiers, internal vocabulary and absolute home paths out of
+      # a public repository. One script, so the same checks run
       # locally before a push — see its docstring for why each one exists.
       #
       # The leak checks are why this file exists: a tracker id and an internal
@@ -134,10 +134,15 @@ jobs:
 
       # The zip is the mod folder a player drops into Mods/ — game-loaded
       # content plus the human documents, no Source/, no CI, no dev tooling.
+      # The list is publish-workshop.sh's CONTENT, item for item, and
+      # check-invariants.py fails if the two differ: until v1.1.0 this one
+      # lacked Patches/ and Languages/, so the GitHub zip put no area tools
+      # on the Zone tab and had none of the strings the C# shows, while the
+      # Workshop copy had both.
       - name: Assemble mod folder
         run: |
           mkdir -p dist/NeatEdges
-          cp -R About Assemblies Defs Textures docs LICENSE README.md dist/NeatEdges/
+          cp -R About Assemblies Defs Languages Patches Textures docs LICENSE README.md dist/NeatEdges/
           cd dist && zip -r "NeatEdges-${GITHUB_REF_NAME}.zip" NeatEdges
 
       - name: Create GitHub release

@@ -40,6 +40,7 @@ exits non-zero.
 | bindings | XML names C# types as strings. Rename the type and the XML keeps the old name: the comp never attaches, the designator never appears, the mod loads without error, and nothing happens. Covers `Class=""`, `…Class` elements and bare `<li>` type lists such as `specialDesignatorClasses`. |
 | preview | Steam rejects a Workshop preview over 1 MiB and the game does not check, so an oversized one fails mid-publish. Absent is only a note until first publish. |
 | patch-root | A patch file whose root is not exactly `<Patch>` has every operation silently discarded. `Patches/NeatEdges_Designators.xml` is the one it guards today. |
+| release-contents | Two lists decide what a player installs: `publish-workshop.sh`'s `CONTENT` stages the Workshop copy, and the CI release job copies the GitHub zip. Each looks complete on its own. They drifted: `Patches/` and `Languages/` reached the allowlist and never the zip, so the v1.0.1 zip put no area tools on the Zone tab and showed raw keys for every string the C# shows. Fails if the two differ, or if either line can no longer be found. |
 | tracking-ref, internal-vocab, home-path | This repository is public. Tracker identifiers and internal working vocabulary mean nothing to a reader here, and an absolute home path both names the author and pins a script to one machine. All three had already reached `run-harness.sh` and been stripped by hand; nothing stopped them coming back. Use `$HOME` or an env override for paths, and state the *reason* in a comment rather than citing a ticket. |
 | harness | The guard is whole-file, never inline — one `#if HARNESS` as the file's first code line, `#endif` as its last, no `#else`. That is what makes a harness build and a shipping build differ by the presence of whole types and by nothing else, so a harness run stays evidence about the assembly that goes out. Also fails on a harness file nobody wrapped, and on a launch flag read from anywhere else. |
 
@@ -95,6 +96,7 @@ Every texture is generated, never hand-edited:
 ```bash
 python3 devtools/make_edge_art.py
 python3 devtools/make_trim_art.py
+uv run --with numpy python3 devtools/make_trim_styles.py
 python3 devtools/check_trims.py
 ```
 
@@ -132,32 +134,94 @@ rotation spins it, which is what makes `Rotation` name the hugged edge with no
 offset. Change that art and the relationship must be re-measured — the harness
 pins it (`mask.rotation.*`) so an inversion fails loudly.
 
-`make_trim_art.py` draws the six trims: twenty-four PNGs under
-`Textures/NeatEdges/Trim/`, the facings of each piece plus build-menu icons for
-the border, the runner and the inside corner. Every facing that rotates is
-authored: the straight's, the runner's and the end cap's west, because the
-engine's mirror of east would light it from the wrong side, and all four of
-the inside corner's, because it is chiral. The frame is one texture because it
-never rotates (see DESIGN §9). The end cap and the frame are drawn by `_frame`, the
-corner's joining rules generalised to any set of edges. Everything is
-greyscale, so the stuff tints it and paint recolours it. The script came from
-Fine Establishments with the first three trims, and still writes the same bytes
-for them that mod shipped; `trim_kit.py` is the part of that mod's texture kit
-it needs: the canvas, the house greys and the PNG writer.
+`make_trim_art.py` writes the floor border's eight PNGs under
+`Textures/NeatEdges/Trim/`: its strip and a build-menu icon for each of its
+seven shapes. The strip, `FloorBorderStrip.png`, is 256 × 192, three bands of
+64 rows: the straight border's north band, row for row, its south band, and
+the two averaged depth by depth, which a diagonal draws along a wall running
+north-west to south-east. `Graphic_StripTrim` lays it out as geometry, a band
+along each edge a shape covers, cut at 45° where two meet, so a shape is a set
+of edges rather than a texture (see DESIGN §9). The script still draws every
+straight-family shape at every facing, as the trims shipped them until
+2026-10, but writes none of those drawings to disk: they are the reference the
+strip is checked against. The end cap and the frame are drawn by `_frame`, the
+corner's joining rules generalised to any set of edges. The diagonal has no
+drawing; its icon, like every icon of the other three styles, is laid out from
+the strip by `trim_icons.py` and rendered by `strip_render.py`. Icons are
+128 px (`trim_icons.ICON`): a build button draws about 75, and 28 icons at 256
+would take 2.4 MB of video memory rather than 0.6. Everything is greyscale, so
+the stuff tints it and paint recolours it. The script came from Fine
+Establishments with the first three trims; `trim_kit.py` is the part of that
+mod's texture kit it needs: the canvas, the house greys and the PNG writer,
+plus a reader for the PNGs it writes.
 
-`check_trims.py` composes the trims on two sheets, at the defs' drawSize
-(exactly one tile), because no trim is ever seen alone. `dist/_trims.png` has the runs:
-a corridor of runners, runners meeting straight borders, east beside west, and
-a run that stops. `dist/_trimshapes.png` has the joins: an inside corner around
-a wall block, a one-wide path capped at both ends, a runner turning a corner
-(a corner and an inside corner stacked on the turning tile), and frames. It
-exits non-zero if the runner's rail drifts off the straight border's, if
-`_frame` stops redrawing any of the twelve shipped straight, corner and runner
-facings pixel for pixel, or if an authored facing goes missing while the art
-still needs it. The sheets cannot show what the game's sampler does at a
-quad's edge; for that, see the joints scene below. The trims' `edges` are measured from this art, so a change
-that moves a band also means re-measuring them; the harness pins every
-rotation (`trims.masks.*`).
+`make_trim_styles.py` draws the other three styles: the inlay, the vine and
+the pebbles. Each is drawn once, as a height map, an albedo and a coverage
+across one band and along its length, then lit three ways, from the band's
+outer edge, from its inner side and side-on, with the floor border's ambient
+and diffuse so a flat face lands on its 180, and written as one three-band
+strip with seven icons. The light runs across the band only (DESIGN §9 has
+why). The vine and the pebbles are opaque from the tile's edge, so they cover
+the edge as the floor border does. The vine's field runs from the edge to its
+dark keyline, with a rounded lip set in from the edge, and its leaves, carved
+in relief, reach past both lines: over the field toward the edge, and past the
+keyline onto the floor, where only the leaves are opaque and cast their shadow.
+Their strips are 1024 wide, four one-tile
+variants side by side, and each variant begins and ends alike: the vine's stem
+leaves a tile at the height and slope it entered, the one leaf that crosses a
+tile's end is the same leaf in every variant, and the pebbles leave grout at
+both ends. The baker wraps its lighting and blurs along the band, as the strip
+wraps in the game, so that leaf is lit at every joint as it is mid-run. The
+vine itself, stem and leaves, is its paint overlay: the baker draws it apart
+from the rest, keeping each texel that stands higher than the berries, bakes
+it on its own and writes its three bands mirrored below the trim's others,
+which makes the strip 1024 × 384 (DESIGN §9). The rest keeps the berries and
+every shadow, the vine's included. It needs numpy, so it runs under
+`uv run --with numpy`; the rest of the art kit is standard library only.
+
+The geometry exists twice: `StripTrimGeometry.cs`, which the game runs, and
+`devtools/strip_trim.py`, which the checks run. Both are pinned to
+`devtools/strip_trim_geometry.txt`, every vertex and UV of every shape at every
+rotation at one cell. `check_trims.py` fails if the Python drifts from it, and
+the harness's `trims.geometry` if the C# does. A deliberate change goes into
+both, and then the file is rewritten:
+
+```bash
+python3 devtools/strip_trim.py --write-golden
+```
+
+`check_trims.py` renders every shape at every rotation from the strip with
+that geometry, a texel to a pixel, and compares each with its drawing. The
+straight and the runner come out identical. A piece with a mitre may differ in
+three 2 × 2 squares at each mitred corner: the outer corner, the groove
+crossing and the inner lip corner, where a butt joint and a mitre draw
+genuinely different texels. A difference anywhere else fails the run, and so
+does the strip no longer being the straight's rows, the runner's rail drifting
+off the straight border's, `_frame` no longer redrawing the twelve straight,
+corner and runner facings pixel for pixel, or anything in the trim folder but
+the four strips and their 28 icons. A strip with variants is measured at its
+joints, since any variant may follow any, and fails past `SEAM_TOLERANCE`, 24
+of 255, on either measure: how far the variants' first and last columns differ
+from one another, and how far a joint steps beyond the largest difference
+between neighbouring columns within three of it. A leaf drawn across the joint
+passes the second, a stem leaving every tile at another height than it entered
+fails it (a deliberately broken copy of the vine measured 255), and the run
+prints both. Grey is weighed by alpha, as it is drawn, because the vine leaves
+texels transparent past its field and their stored grey means nothing. Both
+halves of a strip with a paint overlay are measured, and an empty overlay
+fails; the run prints how much of its half the overlay covers. Then it
+composes the rendered trims on two
+sheets, at the defs' drawSize (exactly one tile), because no trim is ever seen
+alone. `dist/_trims.png` has the runs: a corridor of runners, runners meeting
+straight borders, east beside west, and a run that stops.
+`dist/_trimshapes.png` has the joins: an inside corner around a wall block, a
+one-wide path capped at both ends, a runner turning a corner (a corner and an
+inside corner stacked on the turning tile), and frames. Each style gets a sheet
+of its own, `dist/_trims_<style>.png`: an octagonal room and a diamond, from
+inside and from outside, their joins close up, and a corridor of runners. The
+sheets cannot show what the game's sampler does where two quads meet; for
+that, see the joints scene below. The trims harden the edges their bands run along, and the harness
+pins every rotation (`trims.masks.*`).
 
 A `.dds` beside a PNG silently shadows it with no timestamp check, so a
 regenerated texture can appear not to change. Faster Game Loading writes them
@@ -175,7 +239,11 @@ straight, and frames. Two captures matter: a close zoom near the art's own
 resolution, which shows a one-pixel line for what it is, and the game's
 closest normal zoom, where tile boundaries fall between pixels and a sampling
 seam would shimmer. Paint the trims a light colour for it; unpainted wood on a
-wood floor hides most of what there is to see.
+wood floor hides most of what there is to see. The diagonals' joins need
+diagonal walls beside them, so they are checked on rooms built with Diagonal
+Walls 2 the way players build them: an octagon from inside and from outside, a
+diamond, and a room with bevelled corners. Pick the stuff to contrast with the
+ground: granite pebbles on granite flagstone show nothing.
 
 ## File map
 
@@ -195,15 +263,21 @@ wood floor hides most of what there is to see.
 | `DebugTools_NeatEdges.cs` | the compare toggle |
 | `Harness.cs` | the regression cases — see [TESTING.md](TESTING.md) |
 | `HarmonyInit.cs` | `PatchAll`, and the startup anchor report |
-| `Patch_TrimAtlas.cs` | keeps the trims' textures out of the static atlas and clamps their edges |
-| `NeatEdgesMod.cs` | the mod class, there only to apply `Patch_TrimAtlas` before any def loads |
+| `Graphic_StripTrim.cs` | draws a trim from its strip: prints built trims into one submesh with their colour in the vertices, and blueprints and the ghost on their own material; reads a diagonal's neighbours for its ends |
+| `StripTrimGeometry.cs` | the bands, mitres and UVs of each shape, the diagonal's four kinds of end, and the variant pick, mirrored by `devtools/strip_trim.py` |
+| `TrimPiece.cs` | the extension naming a trim's shape, its strip's band count, variants and paint overlay, read through a blueprint to the def it builds |
+| `CompTrimJoins.cs` | reprints the trims around one that is built or removed, so a diagonal across a section's edge takes its new end; given to every trim def at startup |
+| `Designator_TrimShape.cs` | one build button per shape: a left click places the style on it, a right click lists the rest; built at startup for every shape of trim in a category |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
+`Defs/Misc/NeatEdges_TrimShapes.xml` holds each shape's dropdown group,
 `Patches/NeatEdges_Designators.xml` puts the two area tools on the Zone tab,
 and `Languages/English/Keyed/NeatEdges.xml` holds every string the C# shows a
-player. `devtools/` holds the art generators and the trims' sheet (see
-Textures), the two static checks and the harness runner.
+player. `devtools/` holds the art generators and the renderer they share
+(`strip_render.py`, `trim_icons.py`), the trims' geometry model, its golden
+file and their check (see Textures), the two static checks and the harness
+runner.
 
 ## Things that will waste an afternoon
 

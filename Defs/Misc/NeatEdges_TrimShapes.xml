@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- One dropdown group per trim shape, named by each shape's abstract def in
+       NeatEdges_Trims.xml. Neat Edges builds each shape's button itself
+       (NeatEdges.Designator_TrimShape, added to the Floors tab at startup)
+       because vanilla's dropdown locks a stuffable building to its default
+       material; the trims carry canGenerateDefaultDesignator false, so
+       vanilla makes no button of its own from these groups.
+
+       The groups exist for Better Architect Menu, which unrolls every dropdown
+       on its Floors tab into its elements unless a member's group sets
+       includeEyeDropperTool. Vanilla reads that flag for terrain only, so on
+       things it changes nothing else. -->
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimStraights</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimCorners</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimInsideCorners</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimRunners</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimEndCaps</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimFrames</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+  <DesignatorDropdownGroupDef>
+    <defName>NE_TrimDiagonals</defName>
+    <iconSource>Placed</iconSource>
+    <includeEyeDropperTool>true</includeEyeDropperTool>
+  </DesignatorDropdownGroupDef>
+
+</Defs>
