@@ -10,7 +10,7 @@ an allowlist that leaves `media/` behind. Commands run from this folder.
 | `hard-edges.gif` | the store card: soft edges, a fade to hard, and back |
 | `hard-edges-before.png`, `hard-edges-after.png` | its two frames at 640×360 |
 | `hard-edges-pair.png` | the two frames side by side |
-| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar, anima garden, purple bedroom |
+| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar, anima garden, purple bedroom, and the two trim swatches |
 | `captures/` | every source the above were made from |
 
 ## hard-edges.gif
@@ -63,6 +63,25 @@ pastel green, slate pebbles, wood painted dark mauve), on granite flagstone.
 The purple bedroom and its corridors are deep purple fine carpet edged in
 inlay.
 
+## The trim swatches
+
+`cards/card-trims.png` (a corner of each style over every piece of the plain
+border) and `cards/card-silver-vines.png` (the vine in silver, unpainted and in
+three golds) are drawn rather than captured:
+
+    uv run --with numpy --with pillow python3 trim-swatch.py
+
+It lays the shipped strips out through `../devtools/strip_trim.py`, the
+geometry `check_trims.py` holds to the golden file, and tints each layer as the
+game does: the strip's grey times the material's stuff colour, and the vine's
+overlay times the paint's. The colours are vanilla's: wood, slate blocks, gold
+and silver, and the green, pastel orange and mustard paints. There is no
+lighting, so this is the game at full daylight, on a flat floor. The labels are
+lower case because the font's capital O is the star from the game's logo, and
+its lower case sets the same capitals with a plain O. From a checkout outside
+the constellation, set `RIMWORD_FONT` to the font. The trims card is also on
+the Workshop page; the silver vines card is not in the gallery.
+
 ## transition-gif.py
 
 Makes a looping GIF from a before/after pair: a hold on each state with a
@@ -88,9 +107,10 @@ Regenerate the GIF and copy it again whenever the store card changes.
 
 ## steam-description.bbcode
 
-The Workshop page. Its only images are the four section banners, linked from
-the repo's `main`, so `media/` has to be pushed before the page shows them;
-the store card is the item's preview, and the cards go in the item's gallery.
+The Workshop page. Its images are the four section banners and the trims card,
+linked from the repo's `main`, so `media/` has to be pushed before the page
+shows them; the store card is the item's preview, and the other cards go in
+the item's gallery.
 Check it before every upload (an unclosed tag turns the rest of the page into
 raw text):
 
