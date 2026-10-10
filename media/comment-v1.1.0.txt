@@ -1,0 +1,13 @@
+v1.1.0 update:
+
+Three new styles of floor border: an inlay, a carved vine, and pebbles set in grout, built from stone, for paths outdoors. The vine and the pebbles come in four patterns each, so a long run never repeats on a beat, and paint on the vine colours only its leaves and stem.
+
+Every style now has a diagonal piece, for diagonal walls such as Diagonal Walls 2's. Build it on the wall's own tile and rotate it to put the border on the open side. It joins the borders beside it by itself, and it stops the ground under a staggered diagonal wall creeping into the room.
+
+The Floors tab has one button per shape, holding every style: left-click builds the style shown, right-click lists the others.
+
+Borders are now drawn from one strip per style, so every border of one style in a map section draws in a single call, whatever its materials and paint. Neat Edges no longer needs its patch on the game's texture atlas. The original pieces look the same, except where two of a piece's bands meet at a corner, which is now cut at 45 degrees.
+
+Mod authors can draw their own trims the same way, diagonals and patterns included. The README on GitHub has the details.
+
+Borders you have already built load as they are and harden the same edges.
