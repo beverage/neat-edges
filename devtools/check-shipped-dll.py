@@ -138,6 +138,10 @@ REQUIRED_TYPES = [
     # the other, which matters: this counts substrings.
     "Graphic_StripTrim",
     "TrimPiece",
+    # Given to every trim at startup and building every shape's button; no
+    # XML names them, so nothing else would miss them.
+    "CompTrimJoins",
+    "Designator_TrimShape",
 ]
 
 failures = []

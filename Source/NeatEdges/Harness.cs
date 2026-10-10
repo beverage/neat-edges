@@ -151,6 +151,10 @@ namespace NeatEdges
             Guard("trims.render", CaseTrimRender);
             Guard("trims.geometry", CaseStripGeometry);
             Guard("trims.strip", () => CaseStripTrim(map));
+            Guard("trims.buttons", CaseTrimButtons);
+            Guard("trims.joins", () => CaseTrimJoinsGiven(map));
+            Guard("trims.diagonal.ends", () => CaseDiagonalEndsOnMap(map));
+            Guard("trims.diagonal.refresh", () => CaseDiagonalRefresh(map));
             Guard("trims.cost", () => CaseTrimCost(map));
             Guard("area.designators", CaseAreaDesignatorsRegistered);
             Guard("overlay.icon", CaseOverlayIcon);
@@ -677,59 +681,96 @@ namespace NeatEdges
 
         // ---- the visible trims ------------------------------------------
 
-        internal static readonly string[] TrimNames =
+        /// <summary>
+        /// The trim families: each one's defName stem and how many variants its
+        /// strip holds. Every family has the seven shapes in
+        /// <see cref="FamilyShapes"/>, named by <see cref="TrimSuffixes"/>.
+        /// </summary>
+        internal static readonly (string stem, int variants)[] TrimFamilies =
         {
-            "NE_FloorBorder", "NE_FloorBorderCorner", "NE_FloorBorderInsideCorner",
-            "NE_FloorBorderDouble", "NE_FloorBorderEndCap", "NE_FloorBorderFrame",
+            ("NE_FloorBorder", 1), ("NE_InlayBorder", 1), ("NE_VinesBorder", 4), ("NE_PebblesBorder", 4),
+        };
+
+        internal static readonly string[] TrimSuffixes =
+        {
+            "", "Corner", "InsideCorner", "Double", "EndCap", "Frame", "Diagonal",
         };
 
         /// <summary>
-        /// The trim that must NOT carry the extension. The inside corner covers
-        /// a corner of its tile, not an edge, and the strips beside it already
-        /// seal that corner; the extension with an empty list would harden all
-        /// four edges instead.
+        /// Each suffix's shape. Written out rather than read from the defs, so a
+        /// def naming the wrong shape fails here.
         /// </summary>
-        internal const string InsideCorner = "NE_FloorBorderInsideCorner";
-
-        /// <summary>
-        /// Each trim's shape, rows following TrimNames. Written out rather than
-        /// read from the defs, so a def naming the wrong shape fails here.
-        /// </summary>
-        internal static readonly TrimPiece.Kind[] TrimShapes =
+        internal static readonly TrimPiece.Kind[] FamilyShapes =
         {
             TrimPiece.Kind.Straight, TrimPiece.Kind.Corner, TrimPiece.Kind.InsideCorner,
-            TrimPiece.Kind.Runner, TrimPiece.Kind.EndCap, TrimPiece.Kind.Frame,
+            TrimPiece.Kind.Runner, TrimPiece.Kind.EndCap, TrimPiece.Kind.Frame, TrimPiece.Kind.Diagonal,
         };
 
+        /// <summary>Each shape's dropdown group, in <see cref="FamilyShapes"/>' order.</summary>
+        internal static readonly string[] ShapeGroups =
+        {
+            "NE_TrimStraights", "NE_TrimCorners", "NE_TrimInsideCorners", "NE_TrimRunners",
+            "NE_TrimEndCaps", "NE_TrimFrames", "NE_TrimDiagonals",
+        };
+
+        /// <summary>The six shapes of the golden file's first block, which predates the rest.</summary>
+        internal static readonly TrimPiece.Kind[] TrimShapes = FamilyShapes.Take(6).ToArray();
+
+        /// <summary>Every trim: its defName, its shape and its family's variants.</summary>
+        internal static IEnumerable<(string name, TrimPiece.Kind shape, int variants)> AllTrims()
+        {
+            foreach ((string stem, int variants) in TrimFamilies)
+            {
+                for (int s = 0; s < TrimSuffixes.Length; s++)
+                {
+                    yield return (stem + TrimSuffixes[s], FamilyShapes[s], variants);
+                }
+            }
+        }
+
+        /// <summary>The families whose strip carries a paint overlay: the vine, for its leaves.</summary>
+        internal static readonly string[] OverlayFamilies = { "NE_VinesBorder" };
+
+        /// <summary>The floor border's seven, the family the cost case measures.</summary>
+        internal static readonly string[] TrimNames =
+            TrimSuffixes.Select(s => TrimFamilies[0].stem + s).ToArray();
+
         /// <summary>
-        /// Every trim loads stuffable and paintable, and every one but the
-        /// inside corner carries the extension. A trim missing it is decoration
-        /// and nothing more, and nothing in game would say so; the inside
-        /// corner carrying it would harden a whole tile it only touches. Each
-        /// names its shape, and has a menu icon of its own: without one the
-        /// engine takes the graphic's texture, and the button would show the
-        /// strip.
+        /// Every trim loads stuffable and paintable, on a three-band strip with
+        /// its family's variants and, for the vine alone, a paint overlay, and
+        /// every one but the inside corner carries the extension. A trim missing it is decoration and nothing more, and
+        /// nothing in game would say so; the inside corner carrying it would
+        /// harden a whole tile it only touches. The diagonal carries it with no
+        /// edges listed, which hardens its whole tile. Each names its shape, and
+        /// has a menu icon of its own: without one the engine takes the
+        /// graphic's texture, and the button would show the strip.
         /// </summary>
         internal static void CaseTrimDefs()
         {
-            for (int i = 0; i < TrimNames.Length; i++)
+            foreach ((string name, TrimPiece.Kind shape, int variants) in AllTrims())
             {
-                string name = TrimNames[i];
                 ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
-                bool wantExtension = name != InsideCorner;
-                bool hasExtension = def?.GetModExtension<BlocksTerrainFade>() != null;
+                bool wantExtension = shape != TrimPiece.Kind.InsideCorner;
+                BlocksTerrainFade fade = def?.GetModExtension<BlocksTerrainFade>();
+                bool hasExtension = fade != null;
+                bool wholeTile = fade != null && (fade.edges == null || fade.edges.Count == 0);
+                bool wantWholeTile = shape == TrimPiece.Kind.Diagonal;
                 TrimPiece piece = def?.GetModExtension<TrimPiece>();
+                bool wantOverlay = OverlayFamilies.Any(family => name.StartsWith(family));
                 Texture strip = def?.graphic?.MatSingle?.mainTexture;
                 bool iconOwn = def?.uiIcon != null && def.uiIcon != BaseContent.BadTex && def.uiIcon != strip;
                 bool ok = def != null && def.MadeFromStuff
                     && def.building != null && def.building.paintable
-                    && hasExtension == wantExtension
-                    && piece != null && piece.shape == TrimShapes[i] && iconOwn;
+                    && hasExtension == wantExtension && (!hasExtension || wholeTile == wantWholeTile)
+                    && piece != null && piece.shape == shape && piece.bands == 3 && piece.variants == variants
+                    && piece.paintOverlay == wantOverlay && iconOwn;
                 Check(ok, "trims.defs." + name,
                     def == null ? "missing"
                         : $"stuff {def.MadeFromStuff}, paintable {def.building?.paintable}, "
-                          + $"extension {hasExtension} (want {wantExtension}), "
-                          + $"shape {piece?.shape.ToString() ?? "none"} (want {TrimShapes[i]}), "
+                          + $"extension {hasExtension} (want {wantExtension}), whole tile {wholeTile} "
+                          + $"(want {wantWholeTile}), shape {piece?.shape.ToString() ?? "none"} (want {shape}), "
+                          + $"bands {piece?.bands} (want 3), variants {piece?.variants} (want {variants}), "
+                          + $"paint overlay {piece?.paintOverlay} (want {wantOverlay}), "
                           + $"icon {def.uiIcon?.name ?? "none"}{(iconOwn ? "" : ", not its own")}");
             }
         }
@@ -742,9 +783,10 @@ namespace NeatEdges
         /// the edges each shape draws a band along: facing north, the border's
         /// is N; the corner's N and E; the runner's N and S; the end cap's W,
         /// N and E; the frame's all four whatever its rotation; the inside
-        /// corner's none, since it covers a corner.
+        /// corner's none, since it covers a corner; the diagonal's all four,
+        /// its whole tile, whatever its rotation.
         ///
-        /// Adjacency indices: S=0, W=2, N=4, E=6. Rows follow TrimNames.
+        /// Adjacency indices: S=0, W=2, N=4, E=6. Rows follow FamilyShapes.
         /// </summary>
         internal static void CaseTrimMasks(Map map)
         {
@@ -756,12 +798,14 @@ namespace NeatEdges
             int[][] endCap = { new[] { 2, 4, 6 }, new[] { 4, 6, 0 }, new[] { 6, 0, 2 }, new[] { 0, 2, 4 } };
             int[] all = { 0, 2, 4, 6 };
             int[][] frame = { all, all, all, all };
-            int[][][] expected = { border, corner, inside, runner, endCap, frame };
+            int[][] diagonal = { all, all, all, all };
+            int[][][] expected = { border, corner, inside, runner, endCap, frame, diagonal };
 
-            for (int t = 0; t < TrimNames.Length; t++)
+            foreach ((string name, TrimPiece.Kind shape, _) in AllTrims())
             {
-                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(TrimNames[t]);
-                if (def == null) { Skip("trims.masks." + TrimNames[t], "def missing"); continue; }
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
+                if (def == null) { Skip("trims.masks." + name, "def missing"); continue; }
+                int t = Array.IndexOf(FamilyShapes, shape);
 
                 for (int r = 0; r < rots.Length; r++)
                 {
@@ -773,7 +817,7 @@ namespace NeatEdges
                     foreach (int dir in expected[t][r]) want |= 1 << dir;
                     int got = Patch_SidedFadeBlock.MarkerMask(c, map);
 
-                    Check(got == want, $"trims.masks.{TrimNames[t]}.{rots[r].ToStringHuman()}",
+                    Check(got == want, $"trims.masks.{name}.{rots[r].ToStringHuman()}",
                         $"got {Show(got)}, expected {Show(want)}");
                 }
             }
@@ -795,7 +839,7 @@ namespace NeatEdges
         internal static void CaseTrimStack(Map map)
         {
             ThingDef corner = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderCorner");
-            ThingDef inside = DefDatabase<ThingDef>.GetNamedSilentFail(InsideCorner);
+            ThingDef inside = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderInsideCorner");
             if (corner == null || inside == null)
             {
                 Skip("trims.stack", "a def is missing");
@@ -866,7 +910,7 @@ namespace NeatEdges
             Check(!atlasDoor, "trims.render.atlasUnpatched",
                 "a Neat Edges patch sits on GlobalTextureAtlasManager.TryInsertStatic again");
 
-            foreach (string name in TrimNames)
+            foreach ((string name, _, _) in AllTrims())
             {
                 ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(name);
                 if (def?.graphic == null) { Skip("trims.render." + name, "def or graphic missing"); continue; }
@@ -901,14 +945,49 @@ namespace NeatEdges
         }
 
         /// <summary>
+        /// The scenes whose diagonals the golden file pins, each diagonal's ends
+        /// read from its neighbours: devtools/strip_trim.py's SCENES, item for
+        /// item and in its order.
+        /// </summary>
+        internal static readonly (string name, (TrimPiece.Kind shape, int rot, int x, int z)[] pieces)[] GeometryScenes =
+        {
+            ("lone", new[] { (TrimPiece.Kind.Diagonal, 0, 10, 10) }),
+            ("lone-east", new[] { (TrimPiece.Kind.Diagonal, 1, 10, 10) }),
+            ("lone-south", new[] { (TrimPiece.Kind.Diagonal, 2, 10, 10) }),
+            ("lone-west", new[] { (TrimPiece.Kind.Diagonal, 3, 10, 10) }),
+            ("run", new[] { (TrimPiece.Kind.Diagonal, 0, 10, 10), (TrimPiece.Kind.Diagonal, 0, 11, 11) }),
+            ("octagon-inside", new[]
+            {
+                (TrimPiece.Kind.Straight, 3, 10, 9), (TrimPiece.Kind.Diagonal, 0, 10, 10),
+                (TrimPiece.Kind.Straight, 0, 11, 10),
+            }),
+            ("octagon-outside", new[]
+            {
+                (TrimPiece.Kind.Straight, 0, 9, 9), (TrimPiece.Kind.Diagonal, 0, 10, 10),
+                (TrimPiece.Kind.Straight, 3, 11, 11),
+            }),
+            ("tip-inside", new[] { (TrimPiece.Kind.Diagonal, 0, 10, 10), (TrimPiece.Kind.Diagonal, 1, 11, 10) }),
+            ("tip-outside", new[] { (TrimPiece.Kind.Diagonal, 2, 10, 11), (TrimPiece.Kind.Diagonal, 3, 11, 11) }),
+            ("corner-piece", new[] { (TrimPiece.Kind.Corner, 0, 11, 10), (TrimPiece.Kind.Diagonal, 0, 10, 10) }),
+            ("corner-mitred", new[] { (TrimPiece.Kind.Corner, 3, 11, 10), (TrimPiece.Kind.Diagonal, 0, 10, 10) }),
+            ("sharp", new[] { (TrimPiece.Kind.Diagonal, 0, 10, 10), (TrimPiece.Kind.Straight, 2, 10, 11) }),
+        };
+
+        /// <summary>
         /// The geometry the game draws equals the geometry check_trims.py
         /// renders from, vertex for vertex. Both are pinned to one golden file,
-        /// devtools/strip_trim_geometry.txt: every shape at every rotation at
-        /// cell (3, 5), with a strip that repeats once a tile, as x z u v times
-        /// 4096. Every one of those values is a whole number there, so float and
-        /// double agree exactly. check_trims.py fails if the Python model drifts
-        /// from the file; this fails if the C# does. A deliberate change
-        /// regenerates the file (strip_trim.py --write-golden) and changes both.
+        /// devtools/strip_trim_geometry.txt, as x z u v times 4096: every
+        /// straight-family shape at every rotation at cell (3, 5) on a two-band
+        /// strip that repeats once a tile; the straight on a three-band strip
+        /// and on one of four variants; every diagonal of every scene in
+        /// <see cref="GeometryScenes"/>, its ends read from its neighbours, on
+        /// both; and, on a four-variant strip with a paint overlay, the
+        /// straight and the four lone diagonals sampling each layer. Values
+        /// are compared within one 1/4096th, since the diagonals'
+        /// are not whole numbers and float and double round them apart.
+        /// check_trims.py fails if the Python model drifts from the file; this
+        /// fails if the C# does. A deliberate change regenerates the file
+        /// (strip_trim.py --write-golden) and changes both.
         /// </summary>
         internal static void CaseStripGeometry()
         {
@@ -921,36 +1000,312 @@ namespace NeatEdges
                 return;
             }
             string[] golden = File.ReadAllLines(path).Where(line => line.Length > 0).ToArray();
+            List<string> mine = GeometryLines();
+            int first = Enumerable.Range(0, Math.Max(mine.Count, golden.Length))
+                .FirstOrDefault(i => i >= mine.Count || i >= golden.Length || !GoldenLineMatches(mine[i], golden[i]));
+            bool same = mine.Count == golden.Length
+                && Enumerable.Range(0, mine.Count).All(i => GoldenLineMatches(mine[i], golden[i]));
+            Check(same, "trims.geometry",
+                same ? $"{mine.Count} lines" : $"line {first + 1}: game \"{(first < mine.Count ? mine[first] : "(none)")}\", "
+                    + $"file \"{(first < golden.Length ? golden[first] : "(none)")}\"");
+        }
 
+        internal static List<string> GeometryLines()
+        {
             string[] rotations = { "North", "East", "South", "West" };
+            var cell = new IntVec3(3, 0, 5);
             var mine = new List<string>();
             foreach (TrimPiece.Kind shape in TrimShapes)
             {
                 for (int r = 0; r < 4; r++)
                 {
-                    var verts = new List<Vector3>();
-                    var uvs = new List<Vector3>();
-                    var colors = new List<Color32>();
-                    var tris = new List<int>();
-                    StripTrimGeometry.Append(verts, uvs, colors, tris, shape, new Rot4(r), new IntVec3(3, 0, 5),
-                        Vector3.zero, new Color32(255, 255, 255, 255), 1f);
-                    var values = new List<string>();
-                    for (int i = 0; i < verts.Count; i++)
-                    {
-                        values.Add(Scaled(verts[i].x));
-                        values.Add(Scaled(verts[i].z));
-                        values.Add(Scaled(uvs[i].x));
-                        values.Add(Scaled(uvs[i].y));
-                    }
-                    mine.Add(shape + " " + rotations[r] + " " + string.Join(" ", values));
+                    mine.Add(shape + " " + rotations[r] + " "
+                        + GeometryValues(shape, r, cell, new StripLayout(1f, 2, 1), default));
                 }
             }
-            int first = Enumerable.Range(0, Math.Max(mine.Count, golden.Length))
-                .FirstOrDefault(i => i >= mine.Count || i >= golden.Length || mine[i] != golden[i]);
-            bool same = mine.Count == golden.Length && mine.SequenceEqual(golden);
-            Check(same, "trims.geometry",
-                same ? "" : $"line {first + 1}: game \"{(first < mine.Count ? mine[first] : "(none)")}\", "
-                    + $"file \"{(first < golden.Length ? golden[first] : "(none)")}\"");
+            var layouts = new[] { ("Bands3", new StripLayout(1f, 3, 1)), ("Variants4", new StripLayout(4f, 3, 4)) };
+            foreach ((string label, StripLayout layout) in layouts)
+            {
+                for (int r = 0; r < 4; r++)
+                {
+                    mine.Add(label + " Straight " + rotations[r] + " "
+                        + GeometryValues(TrimPiece.Kind.Straight, r, cell, layout, default));
+                }
+            }
+            foreach ((string label, StripLayout layout) in layouts)
+            {
+                foreach ((string name, var pieces) in GeometryScenes)
+                {
+                    IEnumerable<(TrimPiece.Kind, int)> PiecesAt(IntVec3 c) =>
+                        pieces.Where(p => p.x == c.x && p.z == c.z).Select(p => (p.shape, p.rot));
+                    for (int i = 0; i < pieces.Length; i++)
+                    {
+                        if (pieces[i].shape != TrimPiece.Kind.Diagonal) continue;
+                        var at = new IntVec3(pieces[i].x, 0, pieces[i].z);
+                        DiagonalEnds ends = StripTrimGeometry.DiagonalEndsAt(at, pieces[i].rot, PiecesAt);
+                        mine.Add($"{label} Scene {name} {i} {EndName(ends.a)} {EndName(ends.b)} "
+                            + GeometryValues(TrimPiece.Kind.Diagonal, pieces[i].rot, at, layout, ends));
+                    }
+                }
+            }
+            var overlaid = new StripLayout(4f, 3, 4, 2);
+            foreach (StripLayout layout in new[] { overlaid.Bands, overlaid.Overlay })
+            {
+                string label = "Overlay" + layout.layer;
+                for (int r = 0; r < 4; r++)
+                {
+                    mine.Add(label + " Straight " + rotations[r] + " "
+                        + GeometryValues(TrimPiece.Kind.Straight, r, cell, layout, default));
+                }
+                foreach ((string name, var pieces) in GeometryScenes.Take(4))
+                {
+                    var at = new IntVec3(pieces[0].x, 0, pieces[0].z);
+                    mine.Add($"{label} Scene {name} 0 square square "
+                        + GeometryValues(pieces[0].shape, pieces[0].rot, at, layout, default));
+                }
+            }
+            return mine;
+        }
+
+        internal static string EndName(DiagonalEnd end) =>
+            !end.mitre ? "square" : end.inner ? "mitre-in" : "mitre";
+
+        // ---- one button per shape --------------------------------------------
+
+        /// <summary>
+        /// Every shape is one button on the Floors tab, holding that shape in
+        /// every style in uiOrder, and no trim has a button of its own. The tab
+        /// draws the buttons in the shapes' order. Each is a dropdown, so Copy
+        /// reaches each trim's own designator (trims.strip checks that per def);
+        /// its right-click menu lists the four styles; putting a style on it
+        /// changes its label; and every trim names its shape's dropdown group,
+        /// whose includeEyeDropperTool keeps Better Architect Menu from
+        /// unrolling the button.
+        /// </summary>
+        internal static void CaseTrimButtons()
+        {
+            DesignationCategoryDef floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
+            List<Designator> buttons = floors?.AllResolvedDesignators ?? new List<Designator>();
+            List<string> ownButtons = buttons.OfType<Designator_Build>()
+                .Where(d => d.PlacingDef is ThingDef td && td.GetModExtension<TrimPiece>() != null)
+                .Select(d => d.PlacingDef.defName).ToList();
+            Check(ownButtons.Count == 0, "trims.buttons.noOwnButtons",
+                "trims with a button of their own: " + string.Join(", ", ownButtons));
+
+            // The gizmo grid sorts by Order, stably, so this is the tab's order.
+            List<Designator_TrimShape> shapeButtons = buttons.OfType<Designator_TrimShape>().ToList();
+            List<TrimPiece.Kind> drawn = shapeButtons.OrderBy(b => b.Order).Select(b => b.shape).ToList();
+            Check(drawn.SequenceEqual(FamilyShapes), "trims.buttons.order",
+                "the Floors tab's trim buttons, in the order it draws them: " + string.Join(", ", drawn));
+
+            for (int s = 0; s < FamilyShapes.Length; s++)
+            {
+                TrimPiece.Kind shape = FamilyShapes[s];
+                List<string> want = TrimFamilies.Select(f => f.stem + TrimSuffixes[s]).ToList();
+                Designator_TrimShape button = shapeButtons.FirstOrDefault(b => b.shape == shape);
+                if (button == null)
+                {
+                    Check(false, "trims.buttons." + shape, "no button on the Floors tab builds the " + shape);
+                    continue;
+                }
+                List<string> got = button.Elements.OfType<Designator_Build>().Select(e => e.PlacingDef.defName).ToList();
+                var problems = new List<string>();
+                if (!got.SequenceEqual(want)) problems.Add("holds " + string.Join(", ", got));
+                int options = button.RightClickFloatMenuOptions.Count();
+                if (options != want.Count) problems.Add($"{options} right-click options, want {want.Count}");
+                Designator first = button.current;
+                Designator last = button.Elements[button.Elements.Count - 1];
+                button.Show(last);
+                if (button.Label != last.Label) problems.Add($"shows \"{button.Label}\" with {got[got.Count - 1]} on it");
+                button.Show(first);
+                foreach (string name in want)
+                {
+                    DesignatorDropdownGroupDef group = DefDatabase<ThingDef>.GetNamedSilentFail(name)?.designatorDropdown;
+                    if (group == null || !group.includeEyeDropperTool)
+                        problems.Add(name + " names no group that keeps Better Architect Menu from unrolling its button");
+                    else if (group.defName != ShapeGroups[s])
+                        problems.Add($"{name} names {group.defName}, not its shape's {ShapeGroups[s]}");
+                }
+                Check(problems.Count == 0, "trims.buttons." + shape, string.Join("; ", problems));
+            }
+            Check(Designator_TrimShape.ArchitectFilter() != null, "trims.buttons.searchReadable",
+                "the Architect tab's search filter could not be read, so search finds only the style on a button");
+        }
+
+        // ---- the diagonal's joins on a real map -----------------------------
+
+        /// <summary>
+        /// Every trim, ours and any other mod's, carries CompTrimJoins from its
+        /// def, and a spawned one has the comp: without it a diagonal keeps the
+        /// ends it printed with when a neighbour across a section's edge comes or
+        /// goes.
+        /// </summary>
+        internal static void CaseTrimJoinsGiven(Map map)
+        {
+            List<ThingDef> trims = DefDatabase<ThingDef>.AllDefsListForReading
+                .Where(d => d.GetModExtension<TrimPiece>() != null).ToList();
+            List<string> without = trims.Where(d => !d.comps.Any(c => c.compClass == typeof(CompTrimJoins)))
+                .Select(d => d.defName).ToList();
+            Check(trims.Count > 0 && without.Count == 0, "trims.joins.given",
+                $"{trims.Count} trim defs, {TrimJoinsInjection.Given} given the comp at startup; without it: "
+                + string.Join(", ", without));
+
+            ThingDef straight = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorder");
+            if (straight == null)
+            {
+                Skip("trims.joins.spawned", "no floor border");
+                return;
+            }
+            Clear();
+            Place(map, Origin(map), straight, Rot4.North);
+            Thing thing = Spawned[Spawned.Count - 1];
+            Check(thing.TryGetComp<CompTrimJoins>() != null, "trims.joins.spawned",
+                "a spawned floor border has no CompTrimJoins");
+            Clear();
+        }
+
+        internal static ThingDef SceneDef(TrimPiece.Kind shape)
+        {
+            switch (shape)
+            {
+                case TrimPiece.Kind.Straight: return DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorder");
+                case TrimPiece.Kind.Corner: return DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderCorner");
+                case TrimPiece.Kind.Diagonal: return DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderDiagonal");
+                default: return null;
+            }
+        }
+
+        /// <summary>
+        /// The ends a diagonal reads off the map are the ends the golden file's
+        /// scenes give it. Every scene is built from real things near the map's
+        /// centre and each diagonal's ends are read through the thing grid, the
+        /// way Print reads them; the same scene read from its own list must
+        /// agree, end type, direction, wedge and all. The golden file pins what
+        /// those ends draw; this pins that the map gives the same ends.
+        /// </summary>
+        internal static void CaseDiagonalEndsOnMap(Map map)
+        {
+            IntVec3 o = Origin(map);
+            var shift = new IntVec3(o.x - 10, 0, o.z - 10);
+            foreach ((string name, var pieces) in GeometryScenes)
+            {
+                if (pieces.Any(p => SceneDef(p.shape) == null))
+                {
+                    Skip("trims.diagonal.ends." + name, "a def is missing");
+                    continue;
+                }
+                Clear();
+                foreach (var p in pieces)
+                {
+                    Place(map, new IntVec3(p.x, 0, p.z) + shift, SceneDef(p.shape), new Rot4(p.rot));
+                }
+                IEnumerable<(TrimPiece.Kind, int)> Listed(IntVec3 c) =>
+                    pieces.Where(p => p.x + shift.x == c.x && p.z + shift.z == c.z).Select(p => (p.shape, p.rot));
+                var problems = new List<string>();
+                foreach (var p in pieces.Where(p => p.shape == TrimPiece.Kind.Diagonal))
+                {
+                    IntVec3 at = new IntVec3(p.x, 0, p.z) + shift;
+                    DiagonalEnds onMap = Graphic_StripTrim.EndsFor(TrimPiece.For(SceneDef(p.shape)), map, at,
+                        new Rot4(p.rot));
+                    DiagonalEnds listed = StripTrimGeometry.DiagonalEndsAt(at, p.rot, Listed);
+                    if (onMap.a.key != listed.a.key || onMap.b.key != listed.b.key)
+                    {
+                        problems.Add($"diagonal at ({p.x},{p.z}) reads {EndName(onMap.a)}/{EndName(onMap.b)} "
+                            + $"off the map, {EndName(listed.a)}/{EndName(listed.b)} from the scene");
+                    }
+                }
+                Check(problems.Count == 0, "trims.diagonal.ends." + name, string.Join("; ", problems));
+            }
+            Clear();
+        }
+
+        /// <summary>
+        /// A straight built beside a diagonal, across a map section's edge from
+        /// it, has the diagonal's section print again, so the diagonal's end turns
+        /// into the mitre at once; removing the straight does the same. Spawning
+        /// alone redraws only the straight's own section, which is what this
+        /// asks CompTrimJoins to cover. The diagonal stands in the last column
+        /// of one section, facing north, so its head is its tile's north-east
+        /// corner; a straight facing north on the first column of the next
+        /// section begins there, the octagon's inside join.
+        /// </summary>
+        internal static void CaseDiagonalRefresh(Map map)
+        {
+            ThingDef diagonal = SceneDef(TrimPiece.Kind.Diagonal);
+            ThingDef straight = SceneDef(TrimPiece.Kind.Straight);
+            if (diagonal == null || straight == null)
+            {
+                Skip("trims.diagonal.refresh", "a def is missing");
+                return;
+            }
+            Clear();
+            Section home = map.mapDrawer.SectionAt(Origin(map));
+            CellRect rect = home.CellRect;
+            var a = new IntVec3(rect.maxX, 0, rect.minZ + 4);
+            IntVec3 b = a + IntVec3.East;
+            Section next = map.mapDrawer.SectionAt(b);
+            if (next == home)
+            {
+                Skip("trims.diagonal.refresh", "both cells in one section");
+                return;
+            }
+            Place(map, a, diagonal, Rot4.North);
+            home.dirtyFlags = 0;
+            next.dirtyFlags = 0;
+
+            Place(map, b, straight, Rot4.North);
+            Thing added = Spawned[Spawned.Count - 1];
+            Check((home.dirtyFlags & MapMeshFlagDefOf.Things) != 0, "trims.diagonal.refresh.onBuild",
+                "building the straight left the diagonal's section clean");
+            DiagonalEnds ends = Graphic_StripTrim.EndsFor(TrimPiece.For(diagonal), map, a, Rot4.North);
+            Check(ends.b.mitre && ends.b.inner && !ends.a.mitre, "trims.diagonal.refresh.mitres",
+                $"ends {EndName(ends.a)} and {EndName(ends.b)}, want square and mitre-in");
+
+            home.dirtyFlags = 0;
+            added.Destroy(DestroyMode.Vanish);
+            Check((home.dirtyFlags & MapMeshFlagDefOf.Things) != 0, "trims.diagonal.refresh.onRemove",
+                "removing the straight left the diagonal's section clean");
+            ends = Graphic_StripTrim.EndsFor(TrimPiece.For(diagonal), map, a, Rot4.North);
+            Check(!ends.b.mitre, "trims.diagonal.refresh.squareAgain",
+                $"with the straight gone the head is {EndName(ends.b)}, want square");
+            Clear();
+        }
+
+        internal static string GeometryValues(TrimPiece.Kind shape, int rot, IntVec3 cell, StripLayout layout,
+            DiagonalEnds ends)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector3>();
+            var colors = new List<Color32>();
+            var tris = new List<int>();
+            StripTrimGeometry.Append(verts, uvs, colors, tris, shape, new Rot4(rot), cell, Vector3.zero,
+                new Color32(255, 255, 255, 255), layout, ends);
+            var values = new List<string>();
+            for (int i = 0; i < verts.Count; i++)
+            {
+                values.Add(Scaled(verts[i].x));
+                values.Add(Scaled(verts[i].z));
+                values.Add(Scaled(uvs[i].x));
+                values.Add(Scaled(uvs[i].y));
+            }
+            return string.Join(" ", values);
+        }
+
+        /// <summary>Two golden lines agree when every word does, numbers within one.</summary>
+        internal static bool GoldenLineMatches(string a, string b)
+        {
+            string[] wa = a.Split(' ');
+            string[] wb = b.Split(' ');
+            if (wa.Length != wb.Length) return false;
+            for (int i = 0; i < wa.Length; i++)
+            {
+                if (wa[i] == wb[i]) continue;
+                if (!long.TryParse(wa[i], out long x) || !long.TryParse(wb[i], out long y) || Math.Abs(x - y) > 1)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         internal static string Scaled(float value) =>
@@ -1109,7 +1464,7 @@ namespace NeatEdges
         /// </summary>
         internal static void CaseStripTrim(Map map)
         {
-            List<ThingDef> strips = TrimNames.Select(n => DefDatabase<ThingDef>.GetNamedSilentFail(n))
+            List<ThingDef> strips = AllTrims().Select(t => DefDatabase<ThingDef>.GetNamedSilentFail(t.name))
                 .Where(d => d?.graphic is Graphic_StripTrim).ToList();
             if (strips.Count == 0)
             {
@@ -1153,11 +1508,17 @@ namespace NeatEdges
                 else
                 {
                     if (ghostStrip.mat.shader != ShaderTypeDefOf.EdgeDetect.Shader) problems.Add("ghost shader " + ghostStrip.mat.shader?.name);
+                    // A diagonal's band reaches past its cell into the corners of
+                    // the two cells beside it, by a band's depth over root two.
+                    float reach = piece?.shape == TrimPiece.Kind.Diagonal
+                        ? 0.501f + StripTrimGeometry.Depth * (float)StripTrimGeometry.R2
+                        : 0.501f;
                     foreach (Rot4 rot in Rots)
                     {
-                        Bounds bounds = ghostStrip.MeshFor(piece?.shape ?? TrimPiece.Kind.Straight, rot).bounds;
-                        if (bounds.size.x <= 0f || bounds.min.x < -0.501f || bounds.max.x > 0.501f
-                            || bounds.min.z < -0.501f || bounds.max.z > 0.501f)
+                        Bounds bounds = ghostStrip.MeshFor(piece?.shape ?? TrimPiece.Kind.Straight, rot,
+                            ghostStrip.LayoutFor(piece)).bounds;
+                        if (bounds.size.x <= 0f || bounds.min.x < -reach || bounds.max.x > reach
+                            || bounds.min.z < -reach || bounds.max.z > reach)
                         {
                             problems.Add($"ghost mesh {rot.ToStringHuman()} spans {bounds.min} to {bounds.max}");
                         }
@@ -1179,28 +1540,57 @@ namespace NeatEdges
                 return;
             }
             CaseStripPaint(map, straight);
+
+            ThingDef overlaid = strips.FirstOrDefault(d => TrimPiece.For(d)?.shape == TrimPiece.Kind.Straight
+                && TrimPiece.For(d).paintOverlay);
+            if (overlaid == null)
+            {
+                Skip("trims.strip.paintOverlay", "no straight carries a paint overlay");
+                return;
+            }
+            CaseStripPaintOverlay(map, overlaid);
         }
 
         /// <summary>
-        /// Each edge samples the right half of the strip, the right way up. The
-        /// top half is the band on a north edge, lit lip outermost; the bottom
-        /// half is the band on a south edge, shaded lip outermost. So a north or
-        /// west band reads the top half with its outer edge at the strip's top
-        /// row (V 1), and a south or east band the bottom half with its outer
-        /// edge at the bottom row (V 0). Written out per rotation rather than
-        /// computed, so a wrong rule fails here instead of agreeing with itself.
-        /// Along the band, one tile must span a whole number of repeats.
+        /// Each edge samples the right band of the strip, the right way up. The
+        /// top band is the band on a north edge, lit lip outermost; the next is
+        /// the band on a south edge, shaded lip outermost, its outer edge at its
+        /// last row; a three-band strip's third is the side-lit band, outer edge
+        /// at its first row, against the south band's. So a north or west band
+        /// reads the top band with its outer edge at V 1, and a south or east
+        /// band the second with its outer edge where the second band ends. A
+        /// strip with a paint overlay halves every band, and its overlay is the
+        /// bands mirrored into the bottom half: the overlay's north band has
+        /// its outer edge at V 0. Written out per rotation, band count and
+        /// layer rather than computed, so a wrong rule fails here instead of
+        /// agreeing with itself. Along the band, one tile must span a whole
+        /// number of repeats.
         /// </summary>
         internal static void CaseStripLight()
         {
-            // rotation: which axis is depth, the outer and inner coordinate on
-            // it, and V at each.
-            var expected = new (Rot4 rot, bool depthOnZ, float outer, float inner, float outerV, float innerV)[]
+            // bands, layers, layer, rotation: which axis is depth, the outer
+            // and inner coordinate on it, and V at each.
+            const float third = 1f / 3f;
+            const float sixth = 1f / 6f;
+            var expected = new (int bands, int layers, int layer, Rot4 rot, bool depthOnZ, float outer, float inner,
+                float outerV, float innerV)[]
             {
-                (Rot4.North, true, 0.5f, 0.25f, 1f, 0.5f),
-                (Rot4.East, false, 0.5f, 0.25f, 0f, 0.5f),
-                (Rot4.South, true, -0.5f, -0.25f, 0f, 0.5f),
-                (Rot4.West, false, -0.5f, -0.25f, 1f, 0.5f),
+                (2, 1, 0, Rot4.North, true, 0.5f, 0.25f, 1f, 0.5f),
+                (2, 1, 0, Rot4.East, false, 0.5f, 0.25f, 0f, 0.5f),
+                (2, 1, 0, Rot4.South, true, -0.5f, -0.25f, 0f, 0.5f),
+                (2, 1, 0, Rot4.West, false, -0.5f, -0.25f, 1f, 0.5f),
+                (3, 1, 0, Rot4.North, true, 0.5f, 0.25f, 1f, 2 * third),
+                (3, 1, 0, Rot4.East, false, 0.5f, 0.25f, third, 2 * third),
+                (3, 1, 0, Rot4.South, true, -0.5f, -0.25f, third, 2 * third),
+                (3, 1, 0, Rot4.West, false, -0.5f, -0.25f, 1f, 2 * third),
+                (3, 2, 0, Rot4.North, true, 0.5f, 0.25f, 1f, 5 * sixth),
+                (3, 2, 0, Rot4.East, false, 0.5f, 0.25f, 4 * sixth, 5 * sixth),
+                (3, 2, 0, Rot4.South, true, -0.5f, -0.25f, 4 * sixth, 5 * sixth),
+                (3, 2, 0, Rot4.West, false, -0.5f, -0.25f, 1f, 5 * sixth),
+                (3, 2, 1, Rot4.North, true, 0.5f, 0.25f, 0f, sixth),
+                (3, 2, 1, Rot4.East, false, 0.5f, 0.25f, 2 * sixth, sixth),
+                (3, 2, 1, Rot4.South, true, -0.5f, -0.25f, 2 * sixth, sixth),
+                (3, 2, 1, Rot4.West, false, -0.5f, -0.25f, 0f, sixth),
             };
             const float period = 1f / 64f;
             foreach (var want in expected)
@@ -1210,7 +1600,8 @@ namespace NeatEdges
                 var colors = new List<Color32>();
                 var tris = new List<int>();
                 StripTrimGeometry.Append(verts, uvs, colors, tris, TrimPiece.Kind.Straight, want.rot,
-                    new IntVec3(37, 0, 81), Vector3.zero, new Color32(255, 255, 255, 255), period);
+                    new IntVec3(37, 0, 81), Vector3.zero, new Color32(255, 255, 255, 255),
+                    new StripLayout(period, want.bands, 1, want.layers, want.layer));
                 var problems = new List<string>();
                 if (verts.Count != 4 || uvs.Count != 4 || colors.Count != 4 || tris.Count != 6)
                 {
@@ -1229,7 +1620,9 @@ namespace NeatEdges
                 }
                 float span = uvs.Count == 0 ? 0f : uvs.Max(u => u.x) - uvs.Min(u => u.x);
                 if (Mathf.Abs(span - 1f / period) > 1e-3f) problems.Add($"one tile spans {span} repeats, want {1f / period}");
-                Check(problems.Count == 0, "trims.strip.light." + want.rot.ToStringHuman(), string.Join("; ", problems));
+                string strip = want.layers == 1 ? $"bands{want.bands}" : $"bands{want.bands}.layer{want.layer}";
+                Check(problems.Count == 0, $"trims.strip.light.{strip}.{want.rot.ToStringHuman()}",
+                    string.Join("; ", problems));
             }
         }
 
@@ -1282,6 +1675,88 @@ namespace NeatEdges
             Graphic after = painted.Graphic;
             Check(after is Graphic_StripTrim && after.color == plain.Graphic.color, "trims.strip.unpaintRestores",
                 $"{after?.GetType().Name} in {after?.color}, want {plain.Graphic.color}");
+            Clear();
+        }
+
+        /// <summary>
+        /// A trim with a paint overlay prints every polygon twice into its one
+        /// submesh: from the strip's top half in its stuff's colour, then from
+        /// the bottom half, the overlay, in its paint. Two straights side by
+        /// side, one painted: the painted one's overlay alone takes the paint,
+        /// and its bands and both layers of the other keep the stuff's colour,
+        /// each on its own half of the strip. Unpainting gives the overlay back
+        /// the stuff's colour.
+        /// </summary>
+        internal static void CaseStripPaintOverlay(Map map, ThingDef straight)
+        {
+            Clear();
+            Section section = map.mapDrawer.SectionAt(Origin(map));
+            CellRect rect = section.CellRect;
+            IntVec3 a = new IntVec3(rect.minX + 2, 0, rect.minZ + 2);
+            IntVec3 b = a + IntVec3.East;
+            map.fogGrid.Unfog(a);
+            map.fogGrid.Unfog(b);
+            Place(map, a, straight, Rot4.North);
+            Place(map, b, straight, Rot4.North);
+            Thing plain = Spawned[Spawned.Count - 2];
+            var painted = (Building)Spawned[Spawned.Count - 1];
+            Color32 stuffColour = Graphic_StripTrim.StuffColor(plain);
+            bool Same(Color32 x, Color32 y) => x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a;
+            ColorDef paint = DefDatabase<ColorDef>.AllDefs
+                .FirstOrDefault(c => c.colorType == ColorType.Structure && !Same(c.color, stuffColour));
+            if (paint == null)
+            {
+                Skip("trims.strip.paintOverlay", "no structure paint unlike the stuff's colour");
+                Clear();
+                return;
+            }
+            painted.ChangePaint(paint);
+            Color32 paintColour = paint.color;
+
+            // One layer of each straight, for the vertex counts.
+            var graphic = (Graphic_StripTrim)straight.graphic;
+            StripLayout layout = graphic.LayoutFor(TrimPiece.For(straight));
+            int LayerVerts(IntVec3 cell)
+            {
+                var verts = new List<Vector3>();
+                StripTrimGeometry.Append(verts, new List<Vector3>(), new List<Color32>(), new List<int>(),
+                    TrimPiece.Kind.Straight, Rot4.North, cell, Vector3.zero, new Color32(255, 255, 255, 255), layout);
+                return verts.Count;
+            }
+            int plainVerts = LayerVerts(a);
+            int paintedVerts = LayerVerts(b);
+
+            SectionLayer layer = section.GetLayer(typeof(SectionLayer_ThingsGeneral));
+            List<LayerSubMesh> Ours()
+            {
+                section.RegenerateSingleLayer(layer);
+                return layer.subMeshes
+                    .Where(s => s.finalized && !s.disabled && s.material?.mainTexture == graphic.mat.mainTexture)
+                    .ToList();
+            }
+            List<LayerSubMesh> ours = Ours();
+            Check(layout.layers == 2 && ours.Count == 1, "trims.strip.paintOverlay.oneCall",
+                $"{layout.layers} layer(s); {ours.Count} submesh(es)");
+
+            // Every vertex as (colour, which half of the strip it samples).
+            var printed = ours.SelectMany(s => s.colors.Zip(s.uvs, (c, uv) => (c, overlay: uv.y < 0.5f + 1e-4f))).ToList();
+            int paintOverlay = printed.Count(p => Same(p.c, paintColour) && p.overlay);
+            int paintBands = printed.Count(p => Same(p.c, paintColour) && !p.overlay);
+            int stuffOverlay = printed.Count(p => Same(p.c, stuffColour) && p.overlay);
+            int stuffBands = printed.Count(p => Same(p.c, stuffColour) && !p.overlay);
+            int other = printed.Count - paintOverlay - paintBands - stuffOverlay - stuffBands;
+            Check(paintOverlay == paintedVerts && paintBands == 0 && stuffOverlay == plainVerts
+                    && stuffBands == plainVerts + paintedVerts && other == 0,
+                "trims.strip.paintOverlay.leavesTakePaint",
+                $"paint: {paintOverlay} overlay and {paintBands} band vertices, want {paintedVerts} and 0; "
+                + $"stuff: {stuffOverlay} overlay and {stuffBands} band vertices, want {plainVerts} and "
+                + $"{plainVerts + paintedVerts}; {other} in neither colour");
+
+            painted.ChangePaint(null);
+            List<Color32> after = Ours().SelectMany(s => s.colors).ToList();
+            int total = 2 * (plainVerts + paintedVerts);
+            Check(after.Count == total && after.All(c => Same(c, stuffColour)), "trims.strip.paintOverlay.unpainted",
+                $"{after.Count(c => Same(c, stuffColour))} of {after.Count} vertices in the stuff's colour, want all {total}");
             Clear();
         }
 

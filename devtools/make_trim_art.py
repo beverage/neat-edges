@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""The trims' art: the strip every trim is drawn from, and six menu icons.
-Drawing plus manifest; run it to regenerate.
+"""The floor border's art: the strip its seven shapes are drawn from, and
+their seven menu icons. Drawing plus manifest; run it to regenerate. The other
+three styles are make_trim_styles.py's.
 
     python3 devtools/make_trim_art.py
     python3 devtools/check_trims.py
 
 The trims are 1×1 non-edifice buildings carrying a band along one or more
 edges of their cell, rotated to pick which: the floor border, its corner, the
-inside corner, the double-rail runner, the end cap and the frame. They moved
-here from Fine Establishments with their art.
+inside corner, the double-rail runner, the end cap and the frame, plus the
+diagonal, which follows a diagonal wall's face. They moved here from Fine
+Establishments with their art.
 
 WHAT SHIPS is one strip, not a texture per shape and facing.
 ``Graphic_StripTrim`` lays it out as geometry for each shape
@@ -16,7 +18,10 @@ WHAT SHIPS is one strip, not a texture per shape and facing.
 the shape covers, cut at 45 degrees where two meet. Until 2026-10 each shape
 shipped a texture per facing, 21 in all, kept out of the game's static atlas
 by a Harmony patch so their joints stayed clean; the strip is never offered to
-the atlas at all.
+the atlas at all. Its third band, the other two averaged depth by depth, is
+what a diagonal draws along a wall running north-west to south-east, which
+meets the light side-on. The diagonal has no drawing; its icon is laid out
+from the strip by trim_icons.py, as every later style's icons are.
 
 WHAT STAYS HERE is the drawing of every shape, facing by facing, as it shipped.
 It is the reference: the strip is cut from the runner's rows, and
@@ -30,8 +35,8 @@ It rotates rather than links: the first design was a centred linked band,
 geometrically flawless and wrong, because borders exist to trace edges (wall
 lines, counter feet) and a link mask can never say which edge to hug. The
 light is ABSOLUTE: north and west lips lit, south and east shaded, which is
-why the strip holds two halves, a north band and a south band, and an arm
-takes the half for the edge it ends up on.
+why the strip holds a north band and a south band, and an arm takes the band
+for the edge it ends up on.
 
 THE CORNER owns both bands of an L: drawn here with grooves that run into each
 other, and laid out by the renderer as two arms mitred on the diagonal.
@@ -55,7 +60,9 @@ no mask, which are the colour channels the engine actually supports.
 
 import os
 
-from trim_kit import DARK, HILITE, LIGHT, MOD_ROOT, SHADE, TILE, Canvas, write_rgba_png
+import trim_icons
+from trim_kit import (DARK, HILITE, LIGHT, MOD_ROOT, SHADE, TILE, Canvas,
+                      read_rgba_png, write_rgba_png)
 
 #: Strip width in authored pixels, drawn 1:1 (no atlas crop), so this IS the
 #: on-screen fraction. A quarter tile (60) read far too heavy beside Flooring
@@ -395,9 +402,11 @@ def draw_border_inside_corner(canvas, facing):
 
 
 #: The strip Graphic_StripTrim lays out as geometry, in place of a texture per
-#: facing. Its top half is the band on a north edge and its bottom half the
-#: band on a south edge, each a quarter tile deep at the facings' own 256 rows
-#: to a tile, so every mip level holds the rows the facings' mip levels did.
+#: facing. Its first band is the band on a north edge and its second the band
+#: on a south edge, each a quarter tile deep at the facings' own 256 rows to a
+#: tile, so every mip level holds the rows the facings' mip levels did. The
+#: third is the side-lit band a diagonal draws when its wall lies north-east or
+#: south-west, where the light falls along the band rather than across it.
 #: As wide as the facings it replaces, though the band does not change along
 #: its length and four columns would hold all of it. The game block-compresses
 #: the strip and every level of its mip chain (DXT5 on macOS), and a level
@@ -408,16 +417,24 @@ def draw_border_inside_corner(canvas, facing):
 #: north or south facing, so it compresses the same.
 STRIP_WIDTH = 256
 STRIP_HALF = TILE // 4
+STRIP_BANDS = 3
 
 
 def strip_rows():
-    """The strip's RGBA rows, copied from the runner's north facing.
+    """The strip's RGBA rows: the runner's north facing, then the side band.
 
     That facing is the north band in its top quarter and the south band in its
     bottom quarter, drawn by ``_band`` exactly as the straight's north and
-    south facings are, so the strip is those two facings' rows and nothing
-    new. A band that varied along its length would need a longer strip, so
-    that is asserted rather than assumed.
+    south facings are, so the first two bands are those two facings' rows and
+    nothing new. A band that varied along its length would need a longer
+    strip, so that is asserted rather than assumed.
+
+    The side band is the two halfway between, depth for depth: lit from the
+    side, a bevel facing the edge and one facing the room catch the same light,
+    so its outer lip is the mean of the north band's lit one and the south
+    band's shaded one, and its inner lip likewise. Its outer edge comes first,
+    against the south band's, so neither band's edge texels blur into a
+    transparent row when the strip is mipmapped.
     """
     canvas = Canvas(TILE)
     draw_border_double(canvas, "north")
@@ -426,7 +443,13 @@ def strip_rows():
     for row in kept:
         if row != row[:4] * TILE:
             raise ValueError("a strip row varies along the band; the strip needs more columns")
-    return [row[:STRIP_WIDTH * 4] for row in kept]
+    north = [row[:STRIP_WIDTH * 4] for row in kept[:STRIP_HALF]]
+    south = [row[:STRIP_WIDTH * 4] for row in kept[STRIP_HALF:]]
+    side = []
+    for depth in range(STRIP_HALF):
+        lit, shaded = north[depth], south[STRIP_HALF - 1 - depth]
+        side.append(bytes((a + b + 1) // 2 for a, b in zip(lit, shaded)))
+    return north + south + side
 
 
 def draw_border_icon(canvas):
@@ -500,14 +523,16 @@ def draw_border_inside_icon(canvas):
 if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
 
+    # Icons at trim_icons.ICON: the drawings scale with their canvas, and a
+    # build button never shows one larger than about 75 pixels.
     def write(stem, draw, *args):
-        canvas = Canvas(TILE)
+        canvas = Canvas(trim_icons.ICON)
         draw(canvas, *args)
         canvas.save_png(os.path.join(OUT_DIR, f"{stem}.png"))
 
     # The strip every trim draws from.
-    write_rgba_png(os.path.join(OUT_DIR, "FloorBorderStrip.png"),
-                   STRIP_WIDTH, 2 * STRIP_HALF, strip_rows())
+    strip_path = os.path.join(OUT_DIR, "FloorBorderStrip.png")
+    write_rgba_png(strip_path, STRIP_WIDTH, STRIP_BANDS * STRIP_HALF, strip_rows())
     # Menu icons, one per def: a def without one would show the strip itself
     # on its button. The straight, runner and inside corner draw their own;
     # the corner, end cap and frame show their default-rotation facing, the
@@ -518,3 +543,8 @@ if __name__ == "__main__":
     write("FloorBorderDouble_MenuIcon", draw_border_double_icon)
     write("FloorBorderEndCap_MenuIcon", draw_border_end_cap, "south")
     write("FloorBorderFrame_MenuIcon", draw_border_frame)
+    # The diagonal arrived with the strip and has no drawing of its own: its
+    # icon is laid out from the strip, as every later family's icons are.
+    strip = read_rgba_png(strip_path)
+    write_rgba_png(os.path.join(OUT_DIR, "FloorBorderDiagonal_MenuIcon.png"), trim_icons.ICON, trim_icons.ICON,
+                   trim_icons.render("Diagonal", strip, trim_icons.layout_of(strip, STRIP_BANDS, 1)))

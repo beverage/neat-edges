@@ -1,8 +1,8 @@
 # AGENTS.md
 
 A RimWorld 1.6 mod that stops terrain fading across a tile boundary. An
-invisible marker, a drag-painted area and six visible trims; one Harmony
-assembly; generated textures. It ships no floors and no terrain of its own — it
+invisible marker, a drag-painted area and visible trims, four styles of seven
+shapes each; one Harmony assembly; generated textures. It ships no floors and no terrain of its own — it
 changes how *other* people's floors meet what they touch.
 
 | Doc | Contents |
@@ -21,14 +21,18 @@ dotnet build Source/NeatEdges/NeatEdges.csproj -c Release
 `xmllint --noout` on every changed def. Textures are **generated, never
 hand-edited** — edit the generator and re-run it: `devtools/make_edge_art.py`
 for the marker ghost and the area tools, `devtools/make_trim_art.py` for the
-trims. After any trim art change, run `devtools/check_trims.py`: no trim is
-ever seen alone, and the sheet composes runs the way the engine draws them.
+floor border and `devtools/make_trim_styles.py` (it needs numpy) for the other
+three styles. After any trim art change, run `devtools/check_trims.py`: no trim
+is ever seen alone, and the sheets compose runs the way the engine draws them.
 
 After any change under `Defs/`, run the constellation's hash gate against the
 last committed version (`hash-preflight.py mod <this mod> --previous <a
 checkout of it>`): a new or renamed def, and the Blueprint and Frame names the
 engine generates from a buildable one, can push a def that saves store by slot
-number, which silently breaks existing saves.
+number, which silently breaks existing saves. It has caught one here: the
+pebble and vine families are `NE_PebblesBorder` and `NE_VinesBorder` because the
+singular names put a frame on Jade's slot and a blueprint two slots below
+MineableGold's. The comments above each family say so; never rename them back.
 
 ```bash
 python3 devtools/check-invariants.py
@@ -215,9 +219,9 @@ namespaces are global across every loaded mod.
 **No floors, no terrain.** This mod works with anyone's flooring; shipping its
 own would put it in competition with the mods it exists to serve. Its art is
 the marker's ghost, the two tool icons, the overlay toggle's icon, and the
-trims' strip and their six menu icons, all generated. The ghost and the strip
-are greyscale, so the trims take
-their stuff's colour and paint like any building. The icons copy the vanilla
+trims' four strips and their 28 menu icons, all generated. The ghost and the
+strips are greyscale, so the trims take their stuff's colour and paint like any
+building. The icons copy the vanilla
 icons they sit among instead (see DEVELOPMENT, Textures): the toggle is pixel
 art matching the toggle row, and the area tools match the Zone tab's area
 tools, vanilla's clear slash included. The tools are stone and soil, never the
@@ -230,40 +234,59 @@ runner `[0,2]`, end cap `[3,0,1]`, frame all four), the same offsets
 (`trims.masks.*`). Change one without the other and a trim hardens an edge it
 does not cover, or draws one it does not harden.
 
+**The diagonal hardens its whole tile, and lists no `edges` on purpose.** A
+diagonal wall is usually built as two staggered rows; the outer row covers no
+floor, and its ground creeps into the room at every joint until the room-side
+row is hardened whole. Its band is not on any one edge, so no list of edges
+would describe it anyway. The harness pins it (`trims.defs.*`, `trims.masks.*`).
+
 **The inside corner carries no `BlocksTerrainFade`, and must not.** It covers a
 corner of its tile, not an edge, and the strips beside it already seal that
 corner. The extension with an empty list means all four edges, so "adding it
 with nothing in it" would harden a whole tile the piece only touches; the
 harness pins the absence (`trims.defs.*`).
 
-**Every trim draws from one strip, and its geometry exists twice.**
-`Graphic_StripTrim` lays `Textures/NeatEdges/Trim/FloorBorderStrip.png` out as
+**Every trim draws from its family's strip, and its geometry exists twice.**
+`Graphic_StripTrim` lays a strip from `Textures/NeatEdges/Trim/` out as
 geometry: a band along each edge the shape covers, cut at 45 degrees where two
-meet, mapped to world position along the band. The geometry is
-`StripTrimGeometry` in C# and `devtools/strip_trim.py` in Python, which
-`check_trims.py` renders from, and both are pinned to
-`devtools/strip_trim_geometry.txt`. The harness's `trims.geometry` fails if the
-C# drifts from it and `check_trims.py` if the Python does. Change both, then
-regenerate the file with `strip_trim.py --write-golden`; never regenerate it to
-make one side pass.
+meet, or along a diagonal wall's face, mapped to world position along the band.
+The geometry is `StripTrimGeometry` in C# and `devtools/strip_trim.py` in
+Python, which `check_trims.py` renders from, and both are pinned to
+`devtools/strip_trim_geometry.txt`: every straight-family shape at every
+rotation, the straight on a three-band and a four-variant strip, every
+diagonal in a set of neighbour arrangements (a run, an octagon's corner and a
+diamond's tip from inside and out, a corner piece, a turn too sharp to mitre),
+and the straight and the lone diagonals from each half of a strip with a paint
+overlay.
+The harness's `trims.geometry` fails if the C# drifts from it and
+`check_trims.py` if the Python does. Change both, then regenerate the file with
+`strip_trim.py --write-golden`; never regenerate it to make one side pass.
 
-**The strip's two halves carry the light.** The top half is the band on a north
-edge, lit lip outermost, and the bottom half the band on a south edge, shaded
-lip outermost. West arms take the top half and east arms the bottom, so the
+**The strip's bands carry the light.** Top to bottom: the band on a north edge,
+lit lip outermost; the band on a south edge, shaded lip outermost; and the band
+lit from the side. West arms take the first and east arms the second, so the
 light stays north-west on every shape at every rotation with nothing drawn per
 facing; a mirrored facing lit from the wrong side, the bug the old per-facing
-art had to author its way around, cannot happen. The strip is 256 wide although
-four columns hold the band: at four, its small mips compressed to different
-colours and the straight drew up to 8 levels off.
+art had to author its way around, cannot happen. A diagonal whose wall fills its
+tile's north-west or south-east half takes the first or second band; one along
+a wall running north-west to south-east meets the light side-on and takes the
+third. The floor border's third band is its other two averaged depth by depth;
+the other styles light their height maps from the side. A strip with two bands
+still loads, and its diagonals draw the north band there. The floor border's
+strip is 256 wide although four columns hold the band: at four, its small mips
+compressed to different colours and the straight drew up to 8 levels off.
 
 **The drawings in `make_trim_art.py` are the reference, not shipped art.** The
-strip is cut from the straight's rows, and `check_trims.py` renders every shape
-at every rotation from the strip and compares it with its drawing pixel for
-pixel. The only difference it allows is at each mitre: three squares of 2×2
-texels, the outer corner, the groove crossing and the inner lip corner. So a
-change to a drawing is a change to what players see. `_frame` draws the end cap
-and the frame by the corner's rules, and must keep redrawing the straight,
-corner and runner pixel for pixel; the check fails if it stops.
+floor border's strip is cut from the straight's rows, and `check_trims.py`
+renders every shape at every rotation from the strip and compares it with its
+drawing pixel for pixel. The only difference it allows is at each mitre: three
+squares of 2×2 texels, the outer corner, the groove crossing and the inner lip
+corner. So a change to a drawing is a change to what players see. `_frame` draws
+the end cap and the frame by the corner's rules, and must keep redrawing the
+straight, corner and runner pixel for pixel; the check fails if it stops. The
+diagonal and the other three styles have no drawings: `make_trim_styles.py`
+draws each style once as a height map and lights it three ways, and the check
+holds their strips to their seams instead (below).
 
 **The strip never enters the static atlas, and nothing patches the atlas.** The
 class keeps the base `TryInsertIntoAtlas`, which is empty. Inside the atlas the
@@ -281,6 +304,72 @@ def copies the graphic, class included, but not the extensions, so
 `TrimPiece.For` looks through `entityDefToBuild` to the def being built. And
 every trim def names a `uiIconPath`: without one the engine takes the graphic's
 texture for the build button, which would be the strip.
+
+**A variant is picked by position, never at random, and its ends must match.**
+The vine's and the pebbles' strips hold four one-tile variants side by side;
+every stretch of band draws one, picked by `VariantPick` from a hash of its
+line, side and stretch, so a tile draws the same variant on every load and every
+machine. Changing the hash reshuffles every vine and pebble border already
+built, which is an art change; the golden file pins it. Any variant may follow
+any other, so each must begin and end alike, and the vine's one leaf across a
+joint is the same leaf in every variant. `check_trims.py` measures both halves
+of that, past `SEAM_TOLERANCE` failing: how far the variants' first and last
+columns differ from each other, and how far a joint steps beyond the
+differences between neighbouring columns beside it. The second is the one that
+catches a stem leaving every tile lower than it entered, which leaves the ends
+alike; a deliberately broken strip measured 255. Grey is weighed by alpha, as
+it is drawn: the vine leaves texels transparent past its field. The 16-phase offset that keeps
+parallel runs out of step applies only to a strip with one variant.
+
+**The vine and the pebbles are opaque from the tile's very edge.** A border
+covers the line where its floor meets what lies past it; a trim that leaves that
+line showing reads as an ornament beside the edge, not a border, which is how
+the first vine read in game. The inlay is set into the floor on purpose.
+
+**Paint reaches the vine alone, stem and leaves, through a paint overlay.**
+`TrimPiece.paintOverlay` doubles the strip: the bands in its top half and the
+same layout in its bottom half, the overlay, which `Print` draws over them in
+the one submesh, the bands in `StuffColor(thing)` and the overlay in the
+graphic's colour. Three things hold it together. The bottom half is MIRRORED,
+not stacked in order (`BandV` returns `1 - v` for it, and `make_trim_styles.py`
+writes its rows reversed), so the halves meet inner edge to inner edge and a
+mip never blends a band's edge with an unlike row. The bands' colour comes from
+`StuffColor`, never `color`: a painted thing's graphic is the painted version,
+so its `color` is the paint. And the overlay prints after the bands at the same
+altitude, which is what puts it on top in a shared submesh. `MeshFor` builds
+both halves into the ghost's one mesh, in the material's colour. The harness
+pins it (`trims.strip.paintOverlay.*`, `trims.strip.light.bands3.layer*`, the
+golden file's Overlay lines), and `check_trims.py` fails an empty overlay.
+
+**A diagonal reads its neighbours, and nothing else does.** When its section
+prints, a diagonal looks up the trims that end at its two corners
+(`StripTrimGeometry.DiagonalEndsAt`) and cuts each end to meet them: square
+along a run, a mitre where the line turns, with the wedge on the outside of a
+turn into a straight filled in that straight's own mapping. Only built trims
+count, since a blueprint's def carries no `TrimPiece`. Building or removing a
+thing dirties only its own section, so a neighbour across a section's edge would
+keep its old end; `CompTrimJoins`, which `TrimJoinsInjection` gives every def
+with a `TrimPiece` at startup, other mods' included, reprints the cells around
+it. Keep it even though a diagonal looks right inside one section:
+`trims.diagonal.refresh` builds across a section edge on purpose. The placing
+ghost has no thing, so it reads the map at its own cell.
+
+**Each shape is one button, built at startup.** `TrimShapeButtons` groups the
+defs that carry a `TrimPiece`, a designation category and
+`canGenerateDefaultDesignator false` by category and shape, and adds a
+`Designator_TrimShape` holding that shape in every style, lowest `uiOrder`
+first, to the category. Buttons go by shape rather than by style (changed
+2026-10-10) because shapes are what a player looks for in the menu and styles
+will outnumber them; another mod's style then adds no buttons. It is a
+`Designator_Dropdown`, so a placed trim's Copy still finds that trim's own
+`Designator_Build`, but a left click goes to the current style's
+`ProcessInput`, where the material menu lives; vanilla's dropdown never calls
+it and would lock a stuffable trim to its default material. Every trim names
+its shape's dropdown group, set on the shape's abstract def, with
+`includeEyeDropperTool`, the one flag that stops Better Architect Menu
+unrolling a dropdown on its Floors tab; vanilla reads it for terrain only. The
+Architect's search filter is read by reflection and fails soft to the style on
+the button (`trims.buttons.searchReadable` reports which).
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this

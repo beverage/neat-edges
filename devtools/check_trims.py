@@ -38,13 +38,15 @@ Run after any edit to the drawing or the geometry::
 import math
 import os
 
+import strip_render
 import strip_trim
+import trim_icons
 from make_trim_art import OUT_DIR as TEXTURES
-from make_trim_art import (STRIP_HALF, _frame, draw_border_corner,
+from make_trim_art import (STRIP_BANDS, STRIP_HALF, _frame, draw_border_corner,
                            draw_border_double, draw_border_edge,
                            draw_border_end_cap, draw_border_frame,
                            draw_border_inside_corner)
-from trim_kit import MOD_ROOT, SUPERSAMPLE, TILE, Canvas, read_rgba_png
+from trim_kit import MOD_ROOT, SUPERSAMPLE, TILE, Canvas, read_rgba_png, write_rgba_png
 
 #: Cell size on the sheets, in final pixels. A room seen from the game camera,
 #: not a texture viewer.
@@ -52,21 +54,31 @@ CELL = 128
 
 FLOOR = 150          # mid-grey floor, so the bare bed between rails reads
 WALL = 55
+OUTSIDE = 110        # ground outside a building, on the outside scenes
 COLS, ROWS = 6, 6
 SHAPE_COLS, SHAPE_ROWS = 12, 6
 
 OUT_DIR = os.path.join(MOD_ROOT, "dist")
 
-#: What the trim folder holds, and nothing else.
-SHIPPED = {
-    "FloorBorderStrip.png",
-    "FloorBorder_MenuIcon.png",
-    "FloorBorderCorner_MenuIcon.png",
-    "FloorBorderInsideCorner_MenuIcon.png",
-    "FloorBorderDouble_MenuIcon.png",
-    "FloorBorderEndCap_MenuIcon.png",
-    "FloorBorderFrame_MenuIcon.png",
-}
+#: Every family of trims: its texture stem, how many variants its strip holds,
+#: and how many layers of bands (2 with a paint overlay). The floor border's
+#: strip is drawn by make_trim_art.py and held to its drawings below; the rest
+#: come from make_trim_styles.py.
+FAMILIES = (
+    ("FloorBorder", 1, 1),
+    ("InlayBorder", 1, 1),
+    ("VineBorder", 4, 2),
+    ("PebbleBorder", 4, 1),
+)
+
+#: What the trim folder holds, and nothing else: each family's strip and one
+#: menu icon per shape.
+SHIPPED = {f"{stem}Strip.png" for stem, _, _ in FAMILIES} | {
+    f"{stem}{suffix}_MenuIcon.png" for stem, _, _ in FAMILIES for suffix in trim_icons.SUFFIX.values()}
+
+#: How far a variant strip's joints may be off, per channel, on either of
+#: seam_mismatch's two measures, before a seam shows.
+SEAM_TOLERANCE = 24
 
 FACINGS = ("north", "east", "south", "west")
 
@@ -92,13 +104,13 @@ def drawn(draw, *args):
     return canvas
 
 
-def render(shape, rot, strip, size=TILE, cell=(0, 0)):
+def render(shape, rot, strip, size=TILE, cell=(0, 0), bands=3):
     """One trim, rendered from the strip as the game lays it out: each pixel
     centre is sampled at the nearest texel of whichever polygon holds it.
 
     Returns RGBA rows, top (north) to bottom."""
     width, height, rows = strip
-    period = strip_trim.period_of(width, height)
+    layout = strip_trim.Layout(strip_trim.period_of(width, height, bands), bands)
     polygons = strip_trim.polygons(shape, rot)
     out = []
     for j in range(size):
@@ -108,7 +120,7 @@ def render(shape, rot, strip, size=TILE, cell=(0, 0)):
             x = (i + 0.5) / size - 0.5
             for edge, points in polygons:
                 if strip_trim.inside(points, x, z):
-                    u, v = strip_trim.uv(edge, cell, x, z, period)
+                    u, v = strip_trim.uv(edge, cell, x, z, layout)
                     texel_row = min(height - 1, int(math.floor((1.0 - v) * height)))
                     texel_col = int(math.floor((u % 1.0) * width)) % width
                     row[4 * i:4 * i + 4] = rows[texel_row][4 * texel_col:4 * texel_col + 4]
@@ -258,17 +270,170 @@ def build_shapes_sheet(piece):
     return sheet
 
 
+def seam_mismatch(strip, variants, columns=1, reach=3):
+    """How far a strip's variants are from joining cleanly, per channel, as
+    (ends, step).
+
+    Any variant may follow any, so every variant must end alike and begin
+    alike: `ends` is the widest spread between variants over their first and
+    last `columns` columns, which is as far as the game's filtering reads
+    across a joint.
+
+    And no joint may step: `step` is how far a variant's last column is from
+    any variant's first beyond the largest difference between neighbouring
+    columns within `reach` of the joint on either side. Something drawn across
+    the joint, as the vine's shared leaf is, differs there as it does a column
+    or two away, even where a slanted line of it crosses the joint; a stem
+    leaving a tile at another height than it entered jumps at the joint where
+    it is otherwise smooth.
+
+    Grey is weighed by alpha, as it is drawn: a texel the strip leaves
+    transparent, as the vine's leaves leave the floor past its field, carries
+    a grey the game never shows."""
+    width, _, rows = strip
+    seg = width // variants
+    ends = step = 0
+    for row in rows:
+        for c in (0, 3):
+            def at(k, off):
+                i = 4 * (k * seg + off)
+                return row[i + 3] if c == 3 else row[i] * row[i + 3] // 255
+            for off in list(range(columns)) + list(range(seg - columns, seg)):
+                values = [at(k, off) for k in range(variants)]
+                ends = max(ends, max(values) - min(values))
+            for a in range(variants):
+                for b in range(variants):
+                    near = max([abs(at(a, seg - 2 - i) - at(a, seg - 1 - i)) for i in range(reach)]
+                               + [abs(at(b, i) - at(b, i + 1)) for i in range(reach)])
+                    step = max(step, abs(at(a, seg - 1) - at(b, 0)) - near)
+    return ends, step
+
+
+# ---- diagonal walls, as players build rooms with them -------------------------
+
+def scene_octagon(outside):
+    """An octagonal room, each corner bevelled by two diagonal cells: from
+    inside (the trims on the floor) or from outside (round the walls)."""
+    outline = [(1, 3), (1, 7), (3, 9), (9, 9), (11, 7), (11, 3), (9, 1), (3, 1)]
+    if not outside:
+        pieces = ([("Straight", 3, (1, z)) for z in range(3, 7)]
+                  + [("Straight", 1, (10, z)) for z in range(3, 7)]
+                  + [("Straight", 0, (x, 8)) for x in range(3, 9)]
+                  + [("Straight", 2, (x, 1)) for x in range(3, 9)]
+                  + [("Diagonal", 0, (1, 7)), ("Diagonal", 0, (2, 8)),
+                     ("Diagonal", 1, (9, 8)), ("Diagonal", 1, (10, 7)),
+                     ("Diagonal", 2, (10, 2)), ("Diagonal", 2, (9, 1)),
+                     ("Diagonal", 3, (2, 1)), ("Diagonal", 3, (1, 2))])
+    else:
+        pieces = ([("Straight", 1, (0, z)) for z in range(3, 7)]
+                  + [("Straight", 3, (11, z)) for z in range(3, 7)]
+                  + [("Straight", 2, (x, 9)) for x in range(3, 9)]
+                  + [("Straight", 0, (x, 0)) for x in range(3, 9)]
+                  + [("Diagonal", 2, (1, 7)), ("Diagonal", 2, (2, 8)),
+                     ("Diagonal", 3, (9, 8)), ("Diagonal", 3, (10, 7)),
+                     ("Diagonal", 0, (10, 2)), ("Diagonal", 0, (9, 1)),
+                     ("Diagonal", 1, (2, 1)), ("Diagonal", 1, (1, 2))])
+    return outline, outside, pieces
+
+
+def scene_diamond(outside):
+    """A diamond room, every wall diagonal: four tips, from inside or out."""
+    outline = [(6, 1), (1, 6), (6, 11), (11, 6)]
+    pieces = []
+    for i in range(5):
+        rots = (2, 3, 0, 1) if outside else (0, 1, 2, 3)
+        pieces += [("Diagonal", rots[0], (1 + i, 6 + i)), ("Diagonal", rots[1], (6 + i, 10 - i)),
+                   ("Diagonal", rots[2], (10 - i, 5 - i)), ("Diagonal", rots[3], (5 - i, 1 + i))]
+    return outline, outside, pieces
+
+
+def scene_corridor(length):
+    """A corridor of runners, both rails, for how a pattern repeats."""
+    outline = [(-1, 0), (-1, 1), (length + 1, 1), (length + 1, 0)]
+    return outline, False, [("Runner", 0, (x, 0)) for x in range(length)]
+
+
+def render_scene(scene, strip, layout, window, per_tile):
+    """A scene's floor, walls and trims, rendered from the strip: RGBA rows.
+    Each trim draws every layer its strip holds, the overlay over the bands,
+    as the game prints them."""
+    outline, outside, pieces = scene
+    x0, z0, x1, z1 = window
+    image = strip_render.Image(int(round((x1 - x0) * per_tile)), int(round((z1 - z0) * per_tile)), window)
+    image.fill(OUTSIDE if outside else WALL)
+    image.fill_polygon(outline, WALL if outside else FLOOR)
+    pieces_at = strip_trim.scene_pieces(pieces)
+    for shape, rot, cell in sorted(pieces, key=lambda p: p[0] == "Diagonal"):
+        ends = (strip_trim.SQUARE, strip_trim.SQUARE)
+        if shape == "Diagonal":
+            ends = strip_trim.diagonal_ends(cell, rot, pieces_at)
+        for each in layout.each_layer():
+            for points, uvs in strip_trim.textured(shape, rot, cell, each, ends):
+                image.draw([(cell[0] + 0.5 + x, cell[1] + 0.5 + z) for x, z in points], uvs, strip)
+    return image.rows()
+
+
+def compose(panels, gap=12, background=24):
+    """Panels of RGBA rows side by side, tops aligned."""
+    height = max(len(p) for p in panels)
+    width = sum(len(p[0]) // 4 for p in panels) + gap * (len(panels) - 1)
+    fill = bytes((background, background, background, 255))
+    rows = []
+    for y in range(height):
+        row = bytearray()
+        for k, panel in enumerate(panels):
+            w = len(panel[0]) // 4
+            row += panel[y] if y < len(panel) else fill * w
+            if k < len(panels) - 1:
+                row += fill * gap
+        rows.append(bytes(row))
+    return width, height, rows
+
+
+def stack(blocks, gap=12, background=24):
+    """Composed blocks of rows one above another, lefts aligned."""
+    width = max(w for w, _, _ in blocks)
+    fill = bytes((background, background, background, 255))
+    rows = []
+    for k, (w, _, block) in enumerate(blocks):
+        for row in block:
+            rows.append(row + fill * (width - w))
+        if k < len(blocks) - 1:
+            rows += [fill * width] * gap
+    return width, len(rows), rows
+
+
+def family_sheet(stem, strip, variants, layers=1):
+    """The family's diagonal scenes, whole and with each join close up, and a
+    corridor of runners for how its pattern repeats."""
+    layout = trim_icons.layout_of(strip, STRIP_BANDS, variants, layers)
+    whole = compose([
+        render_scene(scene_octagon(False), strip, layout, (0, 0, 12, 10), 40),
+        render_scene(scene_octagon(True), strip, layout, (-0.5, -0.5, 12.5, 10.5), 40),
+        render_scene(scene_diamond(False), strip, layout, (0, 0, 12, 12), 40),
+        render_scene(scene_diamond(True), strip, layout, (0, 0, 12, 12), 40),
+    ])
+    close = compose([
+        render_scene(scene_octagon(False), strip, layout, (0.6, 5.6, 3.8, 8.8), 128),
+        render_scene(scene_octagon(True), strip, layout, (0.2, 6.2, 3.4, 9.4), 128),
+        render_scene(scene_diamond(False), strip, layout, (4.4, 8.2, 7.6, 11.4), 128),
+        render_scene(scene_diamond(True), strip, layout, (4.4, 8.8, 7.6, 12.0), 128),
+    ])
+    corridor = compose([render_scene(scene_corridor(16), strip, layout, (-0.25, -0.5, 16.25, 1.5), 72)])
+    return stack([whole, close, corridor])
+
+
 if __name__ == "__main__":
     failures = []
 
     # The geometry the game draws, as far as this file is concerned.
     with open(strip_trim.GOLDEN) as golden:
         expected = [line for line in golden.read().splitlines() if line]
-    if strip_trim.golden_lines() != expected:
+    if not strip_trim.golden_matches(strip_trim.golden_lines(), expected):
         failures.append("strip_trim.py no longer matches strip_trim_geometry.txt: the "
                         "Python model has drifted from the file the C# is held to")
     else:
-        print(f"  geometry: {len(expected)} shapes and rotations match the golden file")
+        print(f"  geometry: {len(expected)} lines match the golden file")
 
     # Nothing in the folder but what ships.
     present = set(os.listdir(TEXTURES))
@@ -279,23 +444,54 @@ if __name__ == "__main__":
             ([f"stray {', '.join(stray)}"] if stray else [])
             + ([f"missing {', '.join(missing)}"] if missing else [])))
     else:
-        print("  trim folder: the strip and six icons, nothing else")
+        print(f"  trim folder: {len(FAMILIES)} strips and their {len(SHIPPED) - len(FAMILIES)} icons, nothing else")
 
-    # The strip is the straight's own rows, its two halves apart.
+    # The strip is the straight's own rows, its first two bands apart, and its
+    # third the two halfway between, depth for depth.
     strip = read_rgba_png(os.path.join(TEXTURES, "FloorBorderStrip.png"))
     width, height, rows = strip
     north = drawn(draw_border_edge, "north")._resolve_pixels()
     south = drawn(draw_border_edge, "south")._resolve_pixels()
-    if height != 2 * STRIP_HALF:
-        failures.append(f"strip is {width}x{height}, want {2 * STRIP_HALF} rows")
+    if height != STRIP_BANDS * STRIP_HALF:
+        failures.append(f"strip is {width}x{height}, want {STRIP_BANDS * STRIP_HALF} rows")
     else:
         off = [y for y in range(STRIP_HALF)
                if rows[y] != north[y][:4 * width]
                or rows[STRIP_HALF + y] != south[TILE - STRIP_HALF + y][:4 * width]]
+        side = [y for y in range(STRIP_HALF)
+                if rows[2 * STRIP_HALF + y] != bytes(
+                    (a + b + 1) // 2 for a, b in zip(rows[y], rows[2 * STRIP_HALF - 1 - y]))]
         if off:
             failures.append(f"strip rows {off[:5]} are not the straight's own rows")
+        elif side:
+            failures.append(f"side band rows {side[:5]} are not the north and south bands' mean")
         else:
-            print(f"  strip: {width}x{height}, row for row the straight's north and south bands")
+            print(f"  strip: {width}x{height}, row for row the straight's north and south bands, "
+                  "then their mean")
+
+    # Every other family's strip: three bands, twice over with a paint
+    # overlay, one tile to a variant, and every variant meeting every other at
+    # its ends, in both layers. An overlay must hold something.
+    for stem, variants, layers in FAMILIES[1:]:
+        other = read_rgba_png(os.path.join(TEXTURES, f"{stem}Strip.png"))
+        w, h, other_rows = other
+        if (w, h) != (TILE * variants, layers * STRIP_BANDS * STRIP_HALF):
+            failures.append(f"{stem}Strip is {w}x{h}, want {TILE * variants}x{layers * STRIP_BANDS * STRIP_HALF}")
+            continue
+        ends, step = seam_mismatch(other, variants)
+        overlay = ""
+        if layers > 1:
+            half = STRIP_BANDS * STRIP_HALF
+            coverage = sum(row[i] for row in other_rows[half:] for i in range(3, 4 * w, 4)) / (255 * w * half)
+            overlay = f", overlay covers {coverage:.1%} of its half"
+            if coverage == 0:
+                failures.append(f"{stem}Strip: its paint overlay is empty")
+        if variants > 1 and max(ends, step) > SEAM_TOLERANCE:
+            failures.append(f"{stem}Strip: its variants' ends differ by up to {ends}, and a joint "
+                            f"steps by up to {step}, where they meet")
+        else:
+            print(f"  {stem}Strip: {w}x{h}, {variants} variant(s)"
+                  + (f", ends alike within {ends}, joints step by {step}" if variants > 1 else "") + overlay)
 
     # The reference drawings still agree with each other.
     runner_h = drawn(draw_border_double, "south")
@@ -349,6 +545,15 @@ if __name__ == "__main__":
     print("            F col 6 and row 6: a one-wide path capped at both ends")
     print("            G cols 8-10: a runner turning, corner + inside corner stacked")
     print("            H col 12 and cols 9-10: frames apart and in a block")
+
+    # Each family on diagonal walls: an octagon and a diamond, from inside and
+    # from outside, their joins close up, and a corridor of runners.
+    for stem, variants, layers in FAMILIES:
+        family = read_rgba_png(os.path.join(TEXTURES, f"{stem}Strip.png"))
+        w, h, sheet_rows = family_sheet(stem, family, variants, layers)
+        write_rgba_png(os.path.join(OUT_DIR, f"_trims_{stem}.png"), w, h, sheet_rows)
+    print("  families  dist/_trims_<family>.png: octagon and diamond, inside and out,")
+    print("            the joins close up, and a corridor of runners")
 
     if failures:
         raise SystemExit("trims:\n  " + "\n  ".join(failures))

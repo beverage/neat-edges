@@ -1,50 +1,53 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Defs>
 
-  <!-- The visible trims: a border strip, its corner, the inside corner, the
-       double-rail runner, the end cap and the frame. 1×1 non-edifice
-       buildings that dress the floor without owning
-       the cell, so they coexist with furniture (only edifices wipe edifices)
-       and with any terrain, ours or another mod's. Stuffable and paintable.
+  <!-- The visible trims, in four families: the floor border, the inlay, the
+       vine and the pebbles. Each family has seven shapes: a border strip, its
+       corner, the inside corner, the double-rail runner, the end cap, the
+       frame and the diagonal. 1×1 non-edifice buildings that dress the floor
+       without owning the cell, so they coexist with furniture (only edifices
+       wipe edifices) and with any terrain, ours or another mod's. Stuffable
+       and paintable.
 
        Each carries BlocksTerrainFade for the edges its art covers, so a
        decorated strip is also a hard edge: the hardening follows the same
        rules as the invisible marker, two-sided, with corners sealed.
 
-       All six draw from ONE strip texture, laid out as geometry by
+       Each family draws from ONE strip texture, laid out as geometry by
        NeatEdges.Graphic_StripTrim: a band along each edge the shape covers,
        cut at 45 degrees where two meet, mapped to world position along the
-       band. Each names its shape with a NeatEdges.TrimPiece. The strip's top
-       half is the band on a north edge and its bottom half the band on a
-       south edge, so west and east arms keep the north-west light by taking
-       the matching half. Until 2026-10 each shape shipped a texture per
-       facing, 21 in all, kept out of the static atlas by a Harmony patch; the
-       strip never enters the atlas, and every trim in a map section draws in
-       one call whatever its material or paint. Every def names a uiIconPath:
+       band. Each names its shape with a NeatEdges.TrimPiece, and its strip's
+       band count and variants. The strip's first band is the band on a north
+       edge and its second the band on a south edge, so west and east arms keep
+       the north-west light by taking the matching band; the third is the
+       side-lit band a diagonal draws when its wall lies north-east or
+       south-west. Until 2026-10 each shape shipped a texture per facing, 21 in
+       all, kept out of the static atlas by a Harmony patch; the strips never
+       enter the atlas, and every trim in a map section draws in one call
+       whatever its family, material or paint. Every def names a uiIconPath:
        without one its build button would show the strip.
 
-       Moved here from Fine Establishments (2026-09-24), where they began, with
-       their art and generator (devtools/make_trim_art.py). They were renamed
-       from that mod's prefix on the way; its devtools carry a one-time save
-       patcher for the old names. defNames are permanent once shipped.
+       Built on two levels of abstract parents: NE_TrimBase for what every trim
+       shares, then one per shape for what that shape is (its edges, cost,
+       description and drag). A family's def adds its name, its strip and its
+       TrimPiece. modExtensions lists append down the chain, so a shape's
+       BlocksTerrainFade and a family's TrimPiece end up side by side.
+
+       The floor border moved here from Fine Establishments (2026-09-24), where
+       it began, with its art and generator (devtools/make_trim_art.py); the
+       other families are drawn by devtools/make_trim_styles.py. defNames are
+       permanent once shipped.
 
        The border ROTATES to pick its edge rather than linking: a centred
        linked band was built first and rejected in play, because a link mask
        can never say which side its wall is on. -->
 
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorder</defName>
-    <label>floor border</label>
-    <description>A border strip set into the floor along one edge of a tile, running its full length, so a row of them reads as one continuous line. Rotate to choose the edge. The edge it covers stays crisp: terrain stops fading across it. Built from wood, stone or metal, and takes paint.</description>
+  <ThingDef Name="NE_TrimBase" ParentName="BuildingBase" Abstract="True">
     <thingClass>Building</thingClass>
     <graphicData>
-      <!-- The strip, laid out as one arm on the edge Rotation names. A run is
-           one strip carried across every joint, mapped to world position. -->
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
       <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
       <drawSize>(1,1)</drawSize>
     </graphicData>
-    <uiIconPath>NeatEdges/Trim/FloorBorder_MenuIcon</uiIconPath>
     <rotatable>true</rotatable>
     <defaultPlacingRot>South</defaultPlacingRot>
     <altitudeLayer>TerrainScatter</altitudeLayer>
@@ -60,9 +63,6 @@
     <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
     <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
     <statBases>
-      <MaxHitPoints>40</MaxHitPoints>
-      <WorkToBuild>150</WorkToBuild>
-      <Beauty>1</Beauty>
       <Flammability>0.5</Flammability>
     </statBases>
     <stuffCategories>
@@ -70,13 +70,15 @@
       <li>Stony</li>
       <li>Metallic</li>
     </stuffCategories>
-    <costStuffCount>2</costStuffCount>
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
-    <!-- Line-drag comes from the Defenses draw styles alone;
-         placingDraggableDimensions is a dead field in 1.6. -->
-    <drawStyleCategory>Defenses</drawStyleCategory>
+    <!-- On the Floors tab, but not as a button each: every shape is one
+         button (NeatEdges.Designator_TrimShape), its styles on a right-click
+         menu, and each shape's abstract def below names its dropdown group
+         (Defs/Misc/NeatEdges_TrimShapes.xml). Still buildable, with blueprints
+         and frames, because BuildableByPlayer asks only for a
+         designationCategory. -->
     <designationCategory>Floors</designationCategory>
-    <uiOrder>2060</uiOrder>
+    <canGenerateDefaultDesignator>false</canGenerateDefaultDesignator>
     <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
     <building>
       <isEdifice>false</isEdifice>
@@ -86,19 +88,36 @@
       <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
       <canLandGravshipOn>true</canLandGravshipOn>
     </building>
+  </ThingDef>
+
+  <!-- ===================================================================
+       The shapes
+       =================================================================== -->
+
+  <!-- The straight: one band along one edge, running its full length, so a
+       row of them reads as one continuous line. Rotation names the hugged
+       edge directly, with no offset. -->
+  <ThingDef Name="NE_TrimStraightBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>A border strip set into the floor along one edge of a tile, running its full length, so a row of them reads as one continuous line. Rotate to choose the edge. The edge it covers stays crisp: terrain stops fading across it.</description>
+    <statBases>
+      <MaxHitPoints>40</MaxHitPoints>
+      <WorkToBuild>150</WorkToBuild>
+      <Beauty>1</Beauty>
+    </statBases>
+    <costStuffCount>2</costStuffCount>
+    <designatorDropdown>NE_TrimStraights</designatorDropdown>
+    <!-- Line-drag comes from the Defenses draw styles alone;
+         placingDraggableDimensions is a dead field in 1.6. -->
+    <drawStyleCategory>Defenses</drawStyleCategory>
     <modExtensions>
       <li Class="NeatEdges.BlocksTerrainFade">
-        <!-- Measured, not assumed: decoding the art puts the opaque band in
-             rows 0-34 of a north edge's 256 (the top 14%), which is the
-             strip's top half; Graphic_StripTrim lays it on the edge Rotation
-             names. Rotation names the hugged edge directly, with no
-             offset. -->
+        <!-- Measured, not assumed: decoding the floor border's art puts the
+             opaque band in rows 0-34 of a north edge's 256 (the top 14%),
+             which is the strip's first band; Graphic_StripTrim lays it on the
+             edge Rotation names. -->
         <edges>
           <li>0</li>
         </edges>
-      </li>
-      <li Class="NeatEdges.TrimPiece">
-        <shape>Straight</shape>
       </li>
     </modExtensions>
   </ThingDef>
@@ -107,55 +126,15 @@
        lets them join cleanly at all: two separate strips never can, since
        neither knows the other. Its two arms meet in a mitre on the diagonal.
        Facing north it covers the north and east edges, clockwise from there. -->
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorderCorner</defName>
-    <label>floor border corner</label>
-    <description>Two border strips joined in an L around one corner of a tile. Rotate to choose which corner. Both edges it covers stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
-    <thingClass>Building</thingClass>
-    <graphicData>
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
-      <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <uiIconPath>NeatEdges/Trim/FloorBorderCorner_MenuIcon</uiIconPath>
-    <rotatable>true</rotatable>
-    <defaultPlacingRot>South</defaultPlacingRot>
-    <altitudeLayer>TerrainScatter</altitudeLayer>
-    <passability>Standable</passability>
-    <pathCost>0</pathCost>
-    <fillPercent>0</fillPercent>
-    <selectable>true</selectable>
-    <noRightClickDraftAttack>true</noRightClickDraftAttack>
-    <destroyable>true</destroyable>
-    <clearBuildingArea>false</clearBuildingArea>
-    <canOverlapZones>true</canOverlapZones>
-    <tradeability>None</tradeability>
-    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
-    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+  <ThingDef Name="NE_TrimCornerBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>Two border strips joined in an L around one corner of a tile. Rotate to choose which corner. Both edges it covers stay crisp: terrain stops fading across them.</description>
     <statBases>
       <MaxHitPoints>40</MaxHitPoints>
       <WorkToBuild>150</WorkToBuild>
       <Beauty>1</Beauty>
-      <Flammability>0.5</Flammability>
     </statBases>
-    <stuffCategories>
-      <li>Woody</li>
-      <li>Stony</li>
-      <li>Metallic</li>
-    </stuffCategories>
     <costStuffCount>2</costStuffCount>
-    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
-    <designationCategory>Floors</designationCategory>
-    <uiOrder>2061</uiOrder>
-    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
-    <building>
-      <isEdifice>false</isEdifice>
-      <paintable>true</paintable>
-      <ai_chillDestination>false</ai_chillDestination>
-      <ai_neverTrashThis>true</ai_neverTrashThis>
-      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
-      <canLandGravshipOn>true</canLandGravshipOn>
-    </building>
+    <designatorDropdown>NE_TrimCorners</designatorDropdown>
     <modExtensions>
       <li Class="NeatEdges.BlocksTerrainFade">
         <!-- Two ADJACENT edges, so five directions harden: both cardinals plus
@@ -166,9 +145,6 @@
           <li>0</li>
           <li>1</li>
         </edges>
-      </li>
-      <li Class="NeatEdges.TrimPiece">
-        <shape>Corner</shape>
       </li>
     </modExtensions>
   </ThingDef>
@@ -189,63 +165,15 @@
        than none, since empty means all four edges.
 
        Costs a fraction of a strip, being a band's width square. -->
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorderInsideCorner</defName>
-    <label>floor border inside corner</label>
-    <description>The small square that completes a border where it turns around an inside corner, such as a wall jutting into the room. Border strips each run their own tile's full length, so two meeting around an inside corner leave a notch between them; this fills it and joins them. Rotate to choose which corner. It keeps no edge crisp by itself, since the strips on either side already do. Built from wood, stone or metal, and takes paint.</description>
-    <thingClass>Building</thingClass>
-    <graphicData>
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
-      <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <!-- The piece alone is a small square in one corner, a few pixels on a
-         menu button; the icon draws the whole bend it completes. -->
-    <uiIconPath>NeatEdges/Trim/FloorBorderInsideCorner_MenuIcon</uiIconPath>
-    <rotatable>true</rotatable>
-    <defaultPlacingRot>South</defaultPlacingRot>
-    <altitudeLayer>TerrainScatter</altitudeLayer>
-    <passability>Standable</passability>
-    <pathCost>0</pathCost>
-    <fillPercent>0</fillPercent>
-    <selectable>true</selectable>
-    <noRightClickDraftAttack>true</noRightClickDraftAttack>
-    <destroyable>true</destroyable>
-    <clearBuildingArea>false</clearBuildingArea>
-    <canOverlapZones>true</canOverlapZones>
-    <tradeability>None</tradeability>
-    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
-    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+  <ThingDef Name="NE_TrimInsideCornerBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>The small square that completes a border where it turns around an inside corner, such as a wall jutting into the room. Border strips each run their own tile's full length, so two meeting around an inside corner leave a notch between them; this fills it and joins them. Rotate to choose which corner. It keeps no edge crisp by itself, since the strips on either side already do.</description>
     <statBases>
       <MaxHitPoints>20</MaxHitPoints>
       <WorkToBuild>50</WorkToBuild>
       <Beauty>0</Beauty>
-      <Flammability>0.5</Flammability>
     </statBases>
-    <stuffCategories>
-      <li>Woody</li>
-      <li>Stony</li>
-      <li>Metallic</li>
-    </stuffCategories>
     <costStuffCount>1</costStuffCount>
-    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
-    <designationCategory>Floors</designationCategory>
-    <uiOrder>2062</uiOrder>
-    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
-    <building>
-      <isEdifice>false</isEdifice>
-      <paintable>true</paintable>
-      <ai_chillDestination>false</ai_chillDestination>
-      <ai_neverTrashThis>true</ai_neverTrashThis>
-      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
-      <canLandGravshipOn>true</canLandGravshipOn>
-    </building>
-    <modExtensions>
-      <!-- Its shape only. No BlocksTerrainFade, as above. -->
-      <li Class="NeatEdges.TrimPiece">
-        <shape>InsideCorner</shape>
-      </li>
-    </modExtensions>
+    <designatorDropdown>NE_TrimInsideCorners</designatorDropdown>
   </ThingDef>
 
   <!-- The runner: both opposite edges in one piece, `| |`, or `=` turned a
@@ -254,7 +182,7 @@
 
        ONE def covers both orientations because the figure is 180°-symmetric:
        north is south's figure and west is east's. Each rail is an arm on its
-       own edge, so each takes the strip's half for that edge and the two are
+       own edge, so each takes the strip's band for that edge and the two are
        lit as the straights beside them are.
 
        Two straights at DIFFERENT rotations also stack on one cell (the
@@ -266,56 +194,16 @@
        Costs are DOUBLED against the straight on purpose: a runner is two bands
        of material, and pricing it as one would make the convenient route also
        the cheap one. -->
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorderDouble</defName>
-    <label>floor runner border</label>
-    <description>A pair of border strips set into the floor along opposite edges of a tile, each running its full length. Lay a line of them down a corridor and the floor between the rails reads as a runner. Rotate to choose which pair of edges. Both edges stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
-    <thingClass>Building</thingClass>
-    <graphicData>
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
-      <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <uiIconPath>NeatEdges/Trim/FloorBorderDouble_MenuIcon</uiIconPath>
-    <rotatable>true</rotatable>
-    <defaultPlacingRot>South</defaultPlacingRot>
-    <altitudeLayer>TerrainScatter</altitudeLayer>
-    <passability>Standable</passability>
-    <pathCost>0</pathCost>
-    <fillPercent>0</fillPercent>
-    <selectable>true</selectable>
-    <noRightClickDraftAttack>true</noRightClickDraftAttack>
-    <destroyable>true</destroyable>
-    <clearBuildingArea>false</clearBuildingArea>
-    <canOverlapZones>true</canOverlapZones>
-    <tradeability>None</tradeability>
-    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
-    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+  <ThingDef Name="NE_TrimRunnerBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>A pair of border strips set into the floor along opposite edges of a tile, each running its full length. Lay a line of them down a corridor and the floor between the rails reads as a runner. Rotate to choose which pair of edges. Both edges stay crisp: terrain stops fading across them.</description>
     <statBases>
       <MaxHitPoints>80</MaxHitPoints>
       <WorkToBuild>300</WorkToBuild>
       <Beauty>2</Beauty>
-      <Flammability>0.5</Flammability>
     </statBases>
-    <stuffCategories>
-      <li>Woody</li>
-      <li>Stony</li>
-      <li>Metallic</li>
-    </stuffCategories>
     <costStuffCount>4</costStuffCount>
-    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <designatorDropdown>NE_TrimRunners</designatorDropdown>
     <drawStyleCategory>Defenses</drawStyleCategory>
-    <designationCategory>Floors</designationCategory>
-    <uiOrder>2063</uiOrder>
-    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
-    <building>
-      <isEdifice>false</isEdifice>
-      <paintable>true</paintable>
-      <ai_chillDestination>false</ai_chillDestination>
-      <ai_neverTrashThis>true</ai_neverTrashThis>
-      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
-      <canLandGravshipOn>true</canLandGravshipOn>
-    </building>
     <modExtensions>
       <li Class="NeatEdges.BlocksTerrainFade">
         <!-- Two OPPOSITE edges, so six directions harden: both cardinals and
@@ -325,9 +213,6 @@
           <li>0</li>
           <li>2</li>
         </edges>
-      </li>
-      <li Class="NeatEdges.TrimPiece">
-        <shape>Runner</shape>
       </li>
     </modExtensions>
   </ThingDef>
@@ -339,55 +224,15 @@
        Three arms, mitred where the closed end meets each side. Priced as
        three straights, by the runner's rule that the convenient piece is not
        also the cheap one. -->
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorderEndCap</defName>
-    <label>floor border end cap</label>
-    <description>Three border strips joined in a U around one tile, closing off the end of a runner or of a path one tile wide. Rotate to choose the closed end. All three edges it covers stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
-    <thingClass>Building</thingClass>
-    <graphicData>
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
-      <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <uiIconPath>NeatEdges/Trim/FloorBorderEndCap_MenuIcon</uiIconPath>
-    <rotatable>true</rotatable>
-    <defaultPlacingRot>South</defaultPlacingRot>
-    <altitudeLayer>TerrainScatter</altitudeLayer>
-    <passability>Standable</passability>
-    <pathCost>0</pathCost>
-    <fillPercent>0</fillPercent>
-    <selectable>true</selectable>
-    <noRightClickDraftAttack>true</noRightClickDraftAttack>
-    <destroyable>true</destroyable>
-    <clearBuildingArea>false</clearBuildingArea>
-    <canOverlapZones>true</canOverlapZones>
-    <tradeability>None</tradeability>
-    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
-    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+  <ThingDef Name="NE_TrimEndCapBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>Three border strips joined in a U around one tile, closing off the end of a runner or of a path one tile wide. Rotate to choose the closed end. All three edges it covers stay crisp: terrain stops fading across them.</description>
     <statBases>
       <MaxHitPoints>120</MaxHitPoints>
       <WorkToBuild>450</WorkToBuild>
       <Beauty>3</Beauty>
-      <Flammability>0.5</Flammability>
     </statBases>
-    <stuffCategories>
-      <li>Woody</li>
-      <li>Stony</li>
-      <li>Metallic</li>
-    </stuffCategories>
     <costStuffCount>6</costStuffCount>
-    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
-    <designationCategory>Floors</designationCategory>
-    <uiOrder>2064</uiOrder>
-    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
-    <building>
-      <isEdifice>false</isEdifice>
-      <paintable>true</paintable>
-      <ai_chillDestination>false</ai_chillDestination>
-      <ai_neverTrashThis>true</ai_neverTrashThis>
-      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
-      <canLandGravshipOn>true</canLandGravshipOn>
-    </building>
+    <designatorDropdown>NE_TrimEndCaps</designatorDropdown>
     <modExtensions>
       <li Class="NeatEdges.BlocksTerrainFade">
         <!-- The facing and the edges either side of it: north hugs W,N,E; east
@@ -399,9 +244,6 @@
           <li>1</li>
         </edges>
       </li>
-      <li Class="NeatEdges.TrimPiece">
-        <shape>EndCap</shape>
-      </li>
     </modExtensions>
   </ThingDef>
 
@@ -409,58 +251,21 @@
        stepping stone or a plinth. It never rotates. Even when code sets a
        rotation (GenSpawn leaves a non-rotatable thing's rotation as given) it
        draws the same: four arms cover all four edges whatever the rotation,
-       and each takes the strip's half for the edge it lands on, so the light
+       and each takes the strip's band for the edge it lands on, so the light
        cannot come from the wrong side. It drags like the straight, so a row
        or a block of framed tiles is one order. Priced as four straights. -->
-  <ThingDef ParentName="BuildingBase">
-    <defName>NE_FloorBorderFrame</defName>
-    <label>floor border frame</label>
-    <description>A border strip around all four edges of one tile, framing it, for a stepping stone or the base of a statue. All four edges stay crisp: terrain stops fading across them. Built from wood, stone or metal, and takes paint.</description>
-    <thingClass>Building</thingClass>
-    <graphicData>
-      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
-      <graphicClass>NeatEdges.Graphic_StripTrim</graphicClass>
-      <drawSize>(1,1)</drawSize>
-    </graphicData>
-    <uiIconPath>NeatEdges/Trim/FloorBorderFrame_MenuIcon</uiIconPath>
+  <ThingDef Name="NE_TrimFrameBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>A border strip around all four edges of one tile, framing it, for a stepping stone or the base of a statue. All four edges stay crisp: terrain stops fading across them.</description>
     <rotatable>false</rotatable>
-    <altitudeLayer>TerrainScatter</altitudeLayer>
-    <passability>Standable</passability>
-    <pathCost>0</pathCost>
-    <fillPercent>0</fillPercent>
-    <selectable>true</selectable>
-    <noRightClickDraftAttack>true</noRightClickDraftAttack>
-    <destroyable>true</destroyable>
-    <clearBuildingArea>false</clearBuildingArea>
-    <canOverlapZones>true</canOverlapZones>
-    <tradeability>None</tradeability>
-    <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
-    <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <defaultPlacingRot>North</defaultPlacingRot>
     <statBases>
       <MaxHitPoints>160</MaxHitPoints>
       <WorkToBuild>600</WorkToBuild>
       <Beauty>4</Beauty>
-      <Flammability>0.5</Flammability>
     </statBases>
-    <stuffCategories>
-      <li>Woody</li>
-      <li>Stony</li>
-      <li>Metallic</li>
-    </stuffCategories>
     <costStuffCount>8</costStuffCount>
-    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <designatorDropdown>NE_TrimFrames</designatorDropdown>
     <drawStyleCategory>Defenses</drawStyleCategory>
-    <designationCategory>Floors</designationCategory>
-    <uiOrder>2065</uiOrder>
-    <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
-    <building>
-      <isEdifice>false</isEdifice>
-      <paintable>true</paintable>
-      <ai_chillDestination>false</ai_chillDestination>
-      <ai_neverTrashThis>true</ai_neverTrashThis>
-      <artificialForMeditationPurposes>false</artificialForMeditationPurposes>
-      <canLandGravshipOn>true</canLandGravshipOn>
-    </building>
     <modExtensions>
       <li Class="NeatEdges.BlocksTerrainFade">
         <!-- All four, written out: an empty list means the same, but four
@@ -472,8 +277,576 @@
           <li>3</li>
         </edges>
       </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- The diagonal: a border along a diagonal wall's face, for Diagonal Walls 2
+       and anything drawn like it. It stands on the wall's own tile, under the
+       wall (a non-edifice can be built under an edifice that allows it, as
+       Diagonal Walls 2's do), with its band along the face in the open half.
+       Facing north the wall fills the tile's north-west half; each rotation
+       turns that clockwise, so the band always lies on the side the player
+       rotated it to.
+
+       It reads what ends at its two corners when it prints and cuts each end
+       to meet it: the next diagonal of a run shares a square joint, and a
+       border strip or another diagonal turning there meets it in a mitre.
+       CompTrimJoins, which Neat Edges gives every trim at startup, reprints
+       the neighbours when any trim is built or removed.
+
+       It hardens its whole tile, BlocksTerrainFade with no edges listed: on
+       the usual staggered build the outer row of wall covers no floor, and
+       its ground creeps into the room at every joint until the room-side row
+       is hardened, as rooms built with Diagonal Walls 2 showed in game. Its
+       band is a tile's diagonal long, so it costs half again a straight.
+       AngledLine, one of the Defenses draw styles, drags it along a diagonal. -->
+  <ThingDef Name="NE_TrimDiagonalBase" ParentName="NE_TrimBase" Abstract="True">
+    <description>A border strip that follows a diagonal wall, laid on the wall's own tile under the wall. Rotate to put the band on the open side. Its ends meet the next diagonal, a border strip, or a diagonal turning a corner, whichever is built beside it. Its whole tile stays crisp: terrain stops fading across any of its edges.</description>
+    <statBases>
+      <MaxHitPoints>55</MaxHitPoints>
+      <WorkToBuild>210</WorkToBuild>
+      <Beauty>1</Beauty>
+    </statBases>
+    <costStuffCount>3</costStuffCount>
+    <designatorDropdown>NE_TrimDiagonals</designatorDropdown>
+    <drawStyleCategory>Defenses</drawStyleCategory>
+    <modExtensions>
+      <li Class="NeatEdges.BlocksTerrainFade" />
+    </modExtensions>
+  </ThingDef>
+
+  <!-- ===================================================================
+       The floor border: the family the mod shipped with. Grooved, with lit
+       and shaded lips and a dark keyline on its inner side.
+       =================================================================== -->
+
+  <ThingDef ParentName="NE_TrimStraightBase">
+    <defName>NE_FloorBorder</defName>
+    <label>floor border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorder_MenuIcon</uiIconPath>
+    <uiOrder>2060</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Straight</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimCornerBase">
+    <defName>NE_FloorBorderCorner</defName>
+    <label>floor border corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderCorner_MenuIcon</uiIconPath>
+    <uiOrder>2061</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Corner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimInsideCornerBase">
+    <defName>NE_FloorBorderInsideCorner</defName>
+    <label>floor border inside corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <!-- The piece alone is a small square in one corner, a few pixels on a
+         menu button; the icon draws the whole bend it completes. -->
+    <uiIconPath>NeatEdges/Trim/FloorBorderInsideCorner_MenuIcon</uiIconPath>
+    <uiOrder>2062</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>InsideCorner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimRunnerBase">
+    <defName>NE_FloorBorderDouble</defName>
+    <label>floor runner border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderDouble_MenuIcon</uiIconPath>
+    <uiOrder>2063</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Runner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimEndCapBase">
+    <defName>NE_FloorBorderEndCap</defName>
+    <label>floor border end cap</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderEndCap_MenuIcon</uiIconPath>
+    <uiOrder>2064</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>EndCap</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimFrameBase">
+    <defName>NE_FloorBorderFrame</defName>
+    <label>floor border frame</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderFrame_MenuIcon</uiIconPath>
+    <uiOrder>2065</uiOrder>
+    <modExtensions>
       <li Class="NeatEdges.TrimPiece">
         <shape>Frame</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimDiagonalBase">
+    <defName>NE_FloorBorderDiagonal</defName>
+    <label>floor border diagonal</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/FloorBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/FloorBorderDiagonal_MenuIcon</uiIconPath>
+    <uiOrder>2066</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Diagonal</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- ===================================================================
+       The inlay: one fine line set in from the edge, the floor showing on
+       either side of it. Gold or silver in a wood floor, or jade in marble.
+       =================================================================== -->
+
+  <ThingDef ParentName="NE_TrimStraightBase">
+    <defName>NE_InlayBorder</defName>
+    <label>inlay border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorder_MenuIcon</uiIconPath>
+    <uiOrder>2070</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Straight</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimCornerBase">
+    <defName>NE_InlayBorderCorner</defName>
+    <label>inlay border corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderCorner_MenuIcon</uiIconPath>
+    <uiOrder>2071</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Corner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimInsideCornerBase">
+    <defName>NE_InlayBorderInsideCorner</defName>
+    <label>inlay border inside corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderInsideCorner_MenuIcon</uiIconPath>
+    <uiOrder>2072</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>InsideCorner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimRunnerBase">
+    <defName>NE_InlayBorderDouble</defName>
+    <label>inlay runner border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderDouble_MenuIcon</uiIconPath>
+    <uiOrder>2073</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Runner</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimEndCapBase">
+    <defName>NE_InlayBorderEndCap</defName>
+    <label>inlay border end cap</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderEndCap_MenuIcon</uiIconPath>
+    <uiOrder>2074</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>EndCap</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimFrameBase">
+    <defName>NE_InlayBorderFrame</defName>
+    <label>inlay border frame</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderFrame_MenuIcon</uiIconPath>
+    <uiOrder>2075</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Frame</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimDiagonalBase">
+    <defName>NE_InlayBorderDiagonal</defName>
+    <label>inlay border diagonal</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/InlayBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/InlayBorderDiagonal_MenuIcon</uiIconPath>
+    <uiOrder>2076</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Diagonal</shape>
+        <bands>3</bands>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- ===================================================================
+       The vine: a vine carved in relief along a field opaque from the tile's
+       edge, so it covers the edge as the floor border does; its lines are set
+       in from both sides and its leaves reach past them, so on the floor's
+       side its outline is leaves. Its strip holds four one-tile variants, every
+       one entering and leaving a tile alike, and each tile of band draws one
+       of them by a hash of where it lies, so the vine never repeats on a beat.
+       The leaves and stem are a paint overlay (TrimPiece.paintOverlay): paint
+       colours them and nothing else, so a wooden vine painted green is a green
+       vine on a wooden border; unpainted, the whole trim is its material's
+       colour.
+
+       The defNames say Vines, not Vine, to keep existing saves intact. Saves
+       store rock, ore and deep resources by a def's hash slot, and the engine
+       names a Blueprint_ and a Frame_ after every buildable, sorted ahead of
+       every resource, so a new trim can take a resource's slot. As
+       NE_VineBorder, the inside corner's blueprint hashed two slots below
+       MineableGold: on a modlist that filled the two slots between, it would
+       take gold's slot, and the gold ore in a save's mountains would vanish on
+       load. Rename these only after checking the new names against those
+       slots.
+       =================================================================== -->
+
+  <ThingDef ParentName="NE_TrimStraightBase">
+    <defName>NE_VinesBorder</defName>
+    <label>vine border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorder_MenuIcon</uiIconPath>
+    <uiOrder>2080</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Straight</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimCornerBase">
+    <defName>NE_VinesBorderCorner</defName>
+    <label>vine border corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderCorner_MenuIcon</uiIconPath>
+    <uiOrder>2081</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Corner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimInsideCornerBase">
+    <defName>NE_VinesBorderInsideCorner</defName>
+    <label>vine border inside corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderInsideCorner_MenuIcon</uiIconPath>
+    <uiOrder>2082</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>InsideCorner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimRunnerBase">
+    <defName>NE_VinesBorderDouble</defName>
+    <label>vine runner border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderDouble_MenuIcon</uiIconPath>
+    <uiOrder>2083</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Runner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimEndCapBase">
+    <defName>NE_VinesBorderEndCap</defName>
+    <label>vine border end cap</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderEndCap_MenuIcon</uiIconPath>
+    <uiOrder>2084</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>EndCap</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimFrameBase">
+    <defName>NE_VinesBorderFrame</defName>
+    <label>vine border frame</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderFrame_MenuIcon</uiIconPath>
+    <uiOrder>2085</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Frame</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimDiagonalBase">
+    <defName>NE_VinesBorderDiagonal</defName>
+    <label>vine border diagonal</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/VineBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/VineBorderDiagonal_MenuIcon</uiIconPath>
+    <uiOrder>2086</uiOrder>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Diagonal</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+        <paintOverlay>true</paintOverlay>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <!-- ===================================================================
+       The pebbles: river stones set in grout, for edging paths outdoors. Stone
+       only, and like the vine four one-tile variants, so a path's edge never
+       repeats on a beat.
+
+       The defNames say Pebbles, not Pebble, for the same reason. As
+       NE_PebbleBorder, the end cap's Frame_ took Jade's slot on a 229-mod
+       list, and every deep jade deposit in a save made before the update
+       would have read as that frame.
+       =================================================================== -->
+
+  <ThingDef ParentName="NE_TrimStraightBase">
+    <defName>NE_PebblesBorder</defName>
+    <label>pebble border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorder_MenuIcon</uiIconPath>
+    <uiOrder>2090</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Straight</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimCornerBase">
+    <defName>NE_PebblesBorderCorner</defName>
+    <label>pebble border corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderCorner_MenuIcon</uiIconPath>
+    <uiOrder>2091</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Corner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimInsideCornerBase">
+    <defName>NE_PebblesBorderInsideCorner</defName>
+    <label>pebble border inside corner</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderInsideCorner_MenuIcon</uiIconPath>
+    <uiOrder>2092</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>InsideCorner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimRunnerBase">
+    <defName>NE_PebblesBorderDouble</defName>
+    <label>pebble runner border</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderDouble_MenuIcon</uiIconPath>
+    <uiOrder>2093</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Runner</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimEndCapBase">
+    <defName>NE_PebblesBorderEndCap</defName>
+    <label>pebble border end cap</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderEndCap_MenuIcon</uiIconPath>
+    <uiOrder>2094</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>EndCap</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimFrameBase">
+    <defName>NE_PebblesBorderFrame</defName>
+    <label>pebble border frame</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderFrame_MenuIcon</uiIconPath>
+    <uiOrder>2095</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Frame</shape>
+        <bands>3</bands>
+        <variants>4</variants>
+      </li>
+    </modExtensions>
+  </ThingDef>
+
+  <ThingDef ParentName="NE_TrimDiagonalBase">
+    <defName>NE_PebblesBorderDiagonal</defName>
+    <label>pebble border diagonal</label>
+    <graphicData>
+      <texPath>NeatEdges/Trim/PebbleBorderStrip</texPath>
+    </graphicData>
+    <uiIconPath>NeatEdges/Trim/PebbleBorderDiagonal_MenuIcon</uiIconPath>
+    <uiOrder>2096</uiOrder>
+    <stuffCategories Inherit="False">
+      <li>Stony</li>
+    </stuffCategories>
+    <modExtensions>
+      <li Class="NeatEdges.TrimPiece">
+        <shape>Diagonal</shape>
+        <bands>3</bands>
+        <variants>4</variants>
       </li>
     </modExtensions>
   </ThingDef>

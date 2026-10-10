@@ -424,13 +424,15 @@ whole-tile hardening, and the README credits it for that.
 
 ## 9. The visible trims
 
-A border strip, its corner, the inside corner, a double-rail runner, an end cap
-and a frame: 1×1 non-edifice buildings at a floor-covering altitude that dress
-a cell without owning it, so they coexist with any terrain, with furniture and
-with each other. Stuffable and paintable. Each but the inside corner carries
-`BlocksTerrainFade` for the edges its bands run along, so a decorated strip is
-also a hard edge, by the same two-sided, corner-sealing rules as the invisible
-marker.
+A border strip, its corner, the inside corner, a double-rail runner, an end cap,
+a frame and a diagonal: 1×1 non-edifice buildings at a floor-covering altitude
+that dress a cell without owning it, so they coexist with any terrain, with
+furniture and with each other. Stuffable and paintable. Each but the inside
+corner carries `BlocksTerrainFade` for the edges its bands run along, and the
+diagonal for its whole tile, so a decorated strip is also a hard edge, by the
+same two-sided, corner-sealing rules as the invisible marker. Since v1.1.0 the
+seven shapes come in four styles, each drawn from its own strip: the floor
+border, the inlay, the vine and the pebbles.
 
 They began in Fine Establishments and moved here on 2026-09-24, because what
 makes a trim more than decoration is this mod's mechanism. The art came with
@@ -452,10 +454,11 @@ that one was never published.
   rotation-equality rule as the markers (§3). The runner exists for the
   ergonomics, a corridor's two rails in one drag, and so one piece owns both
   rails. It costs double, so the convenient route is not also the cheap one.
-- **Every trim draws from one strip, laid out as geometry** (since 2026-10,
-  `Graphic_StripTrim`). `FloorBorderStrip.png` is the straight's band at
-  256 × 128: the top half is the band on a north edge, the bottom half the band
-  on a south edge. A shape is the set of edges it draws a band along, an arm
+- **Every trim draws from its family's strip, laid out as geometry** (since
+  2026-10, `Graphic_StripTrim`). `FloorBorderStrip.png` is the straight's band
+  at 256 × 192, in three bands of 64 rows: the band on a north edge, the band
+  on a south edge, and the band lit from the side that diagonals draw (below).
+  A shape is the set of edges it draws a band along, an arm
   each — the straight one, the corner two adjacent, the runner two opposite, the
   end cap three, the frame four — and each arm is a quad a quarter tile deep, cut
   at 45° where a neighbouring arm is present. The inside corner is the band
@@ -465,9 +468,15 @@ that one was never published.
   does not change along its length, but a strip with a pattern along it would
   otherwise repeat in step on every parallel run. Altitude follows the engine's
   `PrintPlane`, which raises a plane's north edge 0.01 above its south.
-- **The strip's halves carry the light.** North and west arms take the top
-  half, south and east the bottom, so light falls from the north-west on every
-  shape at every rotation with nothing drawn per facing. The per-facing
+- **The strip's bands carry the light.** North and west arms take the first
+  band, south and east the second, so light falls from the north-west on every
+  shape at every rotation with nothing drawn per facing. A diagonal along a wall
+  running south-west to north-east sees the light from one side of its band, as
+  a straight does, and takes the first or second; one along a wall running
+  north-west to south-east sees it side-on, and neither is right, so the strip
+  carries a third band lit evenly across. The floor border's third band is its
+  other two averaged depth by depth. A two-band strip still loads (`bands`
+  defaults to 2), and its diagonals draw the first band there. The per-facing
   textures had to earn that one file at a time: the engine mirrors east for a
   missing west, which flips the light and puts the lit lip on the shaded side.
   The runner and the end cap authored their west from the start. The straight
@@ -491,11 +500,12 @@ that one was never published.
   in, and the patch and the mod class went with the per-facing textures. The
   strip repeats along its band and is clamped across it, so a band's outer row
   never blends with the other half's.
-- **A map section draws all its trims in one call.** A section draws one mesh
-  per material (`MapDrawLayer.GetSubMesh` keys on it). Built trims print on one
-  white material with their stuff or paint colour in the vertex colours, the
-  trick the engine uses for every atlased building, so wood, stone, steel and
-  paint share one mesh. Blueprints and the placement ghost print on their own
+- **A map section draws all its trims of one style in one call.** A section
+  draws one mesh per material (`MapDrawLayer.GetSubMesh` keys on it). Built
+  trims print on one white material per strip with their stuff or paint colour
+  in the vertex colours, the trick the engine uses for every atlased building,
+  so wood, stone, steel and paint share one mesh; a section holding all four
+  styles draws four. Blueprints and the placement ghost print on their own
   material, which carries their shader and colour. Measured on 24 pieces, every
   shape at every rotation in one section: 21 draw calls with the per-facing
   textures, 24 in mixed stuff and paint, and 1 on the strip either way. What
@@ -547,10 +557,144 @@ that one was never published.
   one the build button takes the graphic's texture, which is now the strip.
 - **Price follows the bands**, the runner's rule: the end cap costs three
   strips and the frame four, and the inside corner, a band's width square, a
-  fraction of one.
+  fraction of one. The diagonal's band is a tile's diagonal long, so it costs
+  half again a straight, 3 against 2.
+- **The diagonal follows a diagonal wall, on the wall's own tile.** Diagonal
+  Walls 2, the wall mod it was built against, makes each piece a full-tile wall
+  whose art fills half the tile, with its face on the tile's diagonal, and lets
+  a non-edifice be built under it. The trim stands there, with its band along
+  the face in the open half, from the face outward. Laid along the wall's
+  centre line it would be half covered and read half as wide as the straights
+  beside it, so its rotation names the half the wall fills (facing north, the
+  north-west half), and the player turns it until the band shows. U runs along
+  the diagonal at the straight's texel density. The band reaches past its own
+  tile into the corners of the two floor tiles beside it, because consecutive
+  diagonal tiles touch only at a corner, and a band clipped to its tile would
+  leave a notch at every step.
+- **One diagonal does all the joining.** No fixed end serves every join: a run
+  of diagonals needs ends cut square to the diagonal, a turn into a straight a
+  cut on the turn's bisector, and both happen at the same corner point. So a
+  diagonal reads what ends at its two corners when it prints and picks one of
+  four ends at each. Nothing there, or the next diagonal of a run: square. A
+  straight's band ending there on the same side: a mitre on the bisector. On
+  the inside of the turn the two bands overlap and the diagonal draws over the
+  straight's square end, 0.02 higher so it wins against the 0.01 a plane's
+  north edge already rises; on the outside the two square ends leave a wedge,
+  and the diagonal fills it in the straight's own mapping, so the straight's
+  lines run on to the bisector. Another diagonal turning there, as at a
+  diamond's tip: a mitre on the axis. A turn sharper than a right angle stays
+  square. Straights never read their neighbours, so they and their corner
+  pieces draw exactly as before. The one compromise: where two joined pieces
+  differ in material or paint, the outside wedge takes the diagonal's colour,
+  a sliver past the straight's end.
+- **Reading neighbours costs a comp.** Building or removing a thing dirties
+  only its own section (`Thing.DirtyMapMesh`), so a straight built beside a
+  diagonal across a section's edge would leave the diagonal's old end showing.
+  `CompTrimJoins` makes the call linked buildings make, `MapMeshDirty` on the
+  `Things` layer with `regenAdjacentCells`, on spawn and on despawn, where it
+  takes the map from its argument because `parent.Map` is already null. Neat Edges adds the comp at startup to every def carrying
+  `TrimPiece`, other mods' included, so opting in stays two lines of XML, and
+  a thing in an older save builds its comps from its def when it loads. The
+  placing ghost has no thing to ask, so it reads the map at its cell, and a
+  join shows while placing.
+- **The diagonal hardens its whole tile**, as the painted area does. On the
+  usual build, two staggered rows of diagonal wall, the outer row covers no
+  floor, so its ground creeps into the room at every joint, and hardening the
+  room-side row removes it. Behind vanilla walls it changes nothing. Its band
+  lies on no single edge, so no list of edges would describe it.
+- **Variants break the beat.** One tile of an irregular pattern, a vine or
+  pebbles, repeated every tile reads as a stamp. A strip with `variants` holds
+  that many patterns side by side, and every stretch of band one pattern long
+  draws one, picked by a hash of its line, side and stretch: random to look at,
+  the same on every load and machine. Any variant may follow any other, so each
+  begins and ends alike: the vine's stem returns to the height it entered at,
+  and one leaf, the same in every variant, crosses each joint, so the garland
+  runs on through it instead of thinning to bare stem once a tile.
+  `check_trims.py` checks that the ends match and that no joint steps. A piece's polygons are
+  cut where a stretch ends, since a diagonal, √2 long, can hold the end of one
+  pattern and the start of the next. With one variant a line starts its strip
+  at one of 16 phases instead, so parallel runs and a runner's two rails never
+  line up.
+- **The styles.** The inlay is one fine line set in from the edge; the vine, a
+  laurel-like vine carved in relief on a field that runs from the tile's edge
+  to the floor border's dark keyline, a rounded lip set in from the edge, the
+  leaves reaching past both lines, in four variants; the pebbles, river stones
+  in grout, stone only, in four variants, for paths outdoors. A trim cannot know what lies across its
+  edge, a wall, another floor or more of the same floor, so each reads right
+  against all three. Each is drawn once, as a height map, an albedo and a
+  coverage, and lit the three ways the bands need: from the band's outer edge,
+  from its inner side and side-on, with the floor border's ambient and diffuse
+  so a flat face lands on its value of 180. Light runs across the band and
+  never along it: one band serves north and west edges, which see the
+  north-west light from opposite ends, so a bump lit from along the band would
+  be lit from the wrong end on half of them.
+- **A border covers its edge.** The vine and the pebbles are opaque from the
+  tile's very edge, as the floor border is, so the line where the floor meets
+  what lies past it is under the trim. The first vine grew over open floor
+  from a three-texel fillet, and in game it read as an ornament beside the edge
+  rather than a border; the pebbles' grout began a texel in and left a line of
+  floor showing. The vine's lines were then set in from both sides and its
+  leaves grown past them, so the leaves are as much the border's outline as
+  the lines: on the floor's side, past the keyline, only the leaves are
+  opaque. Over its field the ornament casts its shadow onto the field, the
+  baker's relief shadow, offset away from each band's light; past the field,
+  onto the floor. The inlay is set into the floor by design.
+- **Paint colours the vine, not its border** (decided 2026-10-10, the leaves
+  first and the stem the same night; `TrimPiece.paintOverlay`). The vine is
+  meant for natural themes, ground leading into a wooden floor, and painted
+  whole it read as a green kerb: the paint took the lip and the field with the
+  leaves. With the leaves alone painted, the wooden stem ran through the green
+  as a brown line; the stem joined them. A strip with a paint
+  overlay holds its bands in its top half and the same layout, mirrored, in its
+  bottom half, and a trim prints every polygon twice into its one submesh: from
+  the top half in the stuff's colour (`Graphic_StripTrim.StuffColor`, what
+  `Thing.DrawColor` gives before `Building.DrawColor` puts the paint in its
+  place), then from the bottom half in the graphic's colour, which is the paint
+  when there is one. The second print lands on top at the same altitude, and
+  the section still draws in one call. Mirrored rather than stacked in order,
+  so the halves meet inner edge to inner edge: a mipmap blending rows across
+  the middle blends a band with its own copy, never with an outer edge. The
+  vine's baker splits its relief: the vine, stem and leaves, goes to the
+  overlay wherever it stands higher than the berries, which is where it showed
+  carved as one, so unpainted the two halves draw the old vine; the berries and
+  the vine's shadows stay in the bands, in the material's colour. Unpainted is the material's colour rather than green, so an
+  unpainted vine is one colour like every other stuff-built thing, and green
+  costs a dye a tile like any paint. The cost: the vine's strip doubles to
+  1024 × 384, taking the trims' video memory from 1.27 MB to 1.53 MB, and a
+  vine piece prints twice the vertices.
+- **Each shape is one button, its styles on right click** (`Designator_TrimShape`).
+  Four styles of seven shapes would be 28 buttons on the Floors tab. The trims
+  carry `canGenerateDefaultDesignator false`, and at startup each shape in each
+  category becomes a dropdown subclass holding that shape in every style: a
+  left click goes to the style on the button, material menu and all, which
+  vanilla's dropdown never calls; a right click lists the styles. The first
+  build had one button per style with the shapes on right click, which made
+  four buttons; on 2026-10-10 it turned round to seven, because a player
+  looks for a shape in the menu and styles will outnumber shapes, so another
+  mod's style lands on the right-click menus and adds no buttons. Being a
+  dropdown keeps Copy working, since
+  `BuildCopyCommandUtility.FindAllowedDesignator` looks inside dropdowns.
+  Better Architect Menu unrolls every dropdown on its Floors tab unless a
+  member's group sets `includeEyeDropperTool`, which vanilla reads only for
+  terrain, so each shape's abstract def names a group with it set. Search
+  matches a button's label only, so while a search runs the button shows the
+  first style it matches, read from the Architect tab by reflection.
+- **New defNames are checked against hash slots.** Saves store rock, ore and
+  deep resources by a def's slot, and every buildable def adds itself and its
+  generated Blueprint and Frame, which sort ahead of every resource, so a new
+  trim can take a resource's slot (AGENTS.md has the gate). The pebble and vine
+  families' defNames say Pebbles and Vines because the singular names failed
+  it: `Frame_NE_PebbleBorderEndCap` took Jade's slot on a 229-mod list, and
+  `Blueprint_NE_VineBorderInsideCorner` hashed two below MineableGold.
 - **Other mods can draw trims the same way.** A def opts in with the graphic
   class `NeatEdges.Graphic_StripTrim`, a strip of the same layout as its
-  texture, and a `NeatEdges.TrimPiece` naming the shape. Those three are a
-  public contract from v1.1.0: the class name, the `shape` values and the strip
-  layout stay as they are. The harness pins each one as the mod's own trims use
-  it (`trims.render.*`, `trims.geometry`, `trims.strip.*`).
+  texture, and a `NeatEdges.TrimPiece` naming the shape. Those are a public
+  contract from v1.1.0: the class name, the `shape` values, `Diagonal`
+  included, the `bands`, `variants` and `paintOverlay` fields, the strip layout
+  with its mirrored overlay, and the shape
+  button for defs with `canGenerateDefaultDesignator false` stay as they are.
+  An older Neat Edges does not know a newer shape value, and an enum that fails
+  to parse keeps its default, `Straight`, with an error, so a def using one
+  should say which version it needs. The harness pins each part as the mod's
+  own trims use it (`trims.render.*`, `trims.geometry`, `trims.strip.*`,
+  `trims.buttons.*`, `trims.joins.*`).

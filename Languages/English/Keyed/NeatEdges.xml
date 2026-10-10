@@ -10,6 +10,9 @@
   <NeatEdges.DesignatorClear>Clear hard edge area</NeatEdges.DesignatorClear>
   <NeatEdges.DesignatorClearDesc>Remove tiles from the hard edge area, so their edges fade as normal again. Hard edge markers standing on those tiles keep working.</NeatEdges.DesignatorClearDesc>
 
+  <!-- A trim shape's build button: one button, the shape's styles on its right-click menu -->
+  <NeatEdges.TrimShapeStyles>Right-click for the other styles.</NeatEdges.TrimShapeStyles>
+
   <!-- The overlay toggle on the bottom-right row -->
   <NeatEdges.OverlayToggle>Show hard edges: every tile with a hard edge marker on it, and the painted hard edge area.</NeatEdges.OverlayToggle>
 
