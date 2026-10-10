@@ -10,7 +10,7 @@ an allowlist that leaves `media/` behind. Commands run from this folder.
 | `hard-edges.gif` | the store card: soft edges, a fade to hard, and back |
 | `hard-edges-before.png`, `hard-edges-after.png` | its two frames at 640×360 |
 | `hard-edges-pair.png` | the two frames side by side |
-| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar |
+| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar, anima garden, purple bedroom |
 | `captures/` | every source the above were made from |
 
 ## hard-edges.gif
@@ -48,12 +48,20 @@ crop by hand where they disagree. Each card's numbers:
 | lab | screenshot, 724×726 | the walls' outer outline, x 72..656, y 73..657 (mirror axis 364.0) | 720×722 at +4+4 | 720×722 |
 | garden | screenshot, 901×802 | across: the rose bed, x 453.5; down: the beds' frames, y 238..566 (the mirror axis read 396.5, pulled up by the plant art) | 894×800 at +7+2 | 894×800 |
 | bar | screenshot from the main save, 944×651 | across: the mirror axis, x 471.5; down: kept as framed | 942×651 at +0+0 | 942×651 |
+| anima-garden | screenshot, 929×923 | the walls' outer outline, x 112..818, y 110..816 (centre 465.5, 463.5), framed so the four outer braziers sit in the corners (the mirror axis read low, pulled by the grass and the flames) | 719×721 at +106+103 | 719×721 |
+| purple-bedroom | screenshot, 533×501, zoomed out far enough that the bed's owner label is not drawn | the purple carpet corridors, x 81..111 and 423..453, y 80..110 and 391..421 (the mirror axes agree, 267.5 and 251.0) | 531×500 at +2+1 | 531×500 |
 
 The church, lab, garden and bar screenshots are about 42 px per cell; the
-bedroom capture is 65. The church, lab and garden are in the media sandbox:
-slate walls and paving; the garden's beds in limestone trims with corn,
-potatoes, strawberries and roses; the rooms north and south of it in marine
-fine carpet with silver trims and silver columns.
+bedroom capture is 65, the anima garden 26 and the purple bedroom 31. The
+church, lab and garden are in the media sandbox: slate walls and paving; the
+garden's beds in limestone trims with corn, potatoes, strawberries and roses;
+the rooms north and south of it in marine fine carpet with silver trims and
+silver columns. So are the anima garden and the purple bedroom. The anima
+garden is an octagon of totemic boards round an anima tree and its grass, each
+quadrant ringed inside and out in one trim style (gold inlay, vine painted
+pastel green, slate pebbles, wood painted dark mauve), on granite flagstone.
+The purple bedroom and its corridors are deep purple fine carpet edged in
+inlay.
 
 ## transition-gif.py
 
