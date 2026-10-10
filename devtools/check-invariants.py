@@ -216,6 +216,32 @@ def check_preview():
                      % (size, 100.0 * size / PREVIEW_MAX, PREVIEW_MAX))
 
 
+# ------------------------------------------------------------ workshop comments
+
+# The comment posted under the Workshop item at each update lives in
+# media/comment-v*.txt. Steam takes at most 1,000 characters in a comment, so a
+# longer draft cannot be posted as written, and the file then disagrees with
+# what went out: the v1.1.0 draft was 1,244 characters and was cut to 705 by
+# hand while posting. Counted without the file's final newline, each newline
+# once.
+COMMENT_MAX = 1000
+COMMENT_NAME = re.compile(r"comment-v.+\.txt")
+
+
+def check_workshop_comments():
+    media = os.path.join(ROOT, "media")
+    if not os.path.isdir(media):
+        return
+    for name in sorted(os.listdir(media)):
+        if not COMMENT_NAME.fullmatch(name):
+            continue
+        with open(os.path.join(media, name), encoding="utf-8") as handle:
+            text = handle.read().rstrip("\n")
+        if len(text) > COMMENT_MAX:
+            fail("comment", "media/%s is %d characters; Steam takes at most %d "
+                 "in a Workshop comment" % (name, len(text), COMMENT_MAX))
+
+
 # ------------------------------------------------------------ private tracking
 
 # This repository is public. The backlog and decision log that drive it are not,
@@ -431,6 +457,7 @@ def main():
     check_translation_keys()
     check_xml_bindings()
     check_preview()
+    check_workshop_comments()
     check_patch_roots()
     check_release_contents()
     check_private_tracking_refs()

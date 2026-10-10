@@ -120,6 +120,16 @@ The Flooring Floors comparison in it was checked against that mod's own defs
 (`ThingsDefs.xml`: one border, `KS_StoneBorderDark`, Stony only, a single
 rotatable straight) and its border art (a corner is two strips overlapping).
 
+## Change notes and comments
+
+`changelog-v*.bbcode` is each update's change note, pasted into the Workshop's
+change notes; validate it with `bbcode-preview.py` like the page.
+`comment-v*.txt` is the comment posted under the item at the same update:
+"vX update:", then one sentence per change saying what it is, ending on what
+did not change. Steam takes at most 1,000 characters in a comment, and
+`devtools/check-invariants.py` fails a longer file. If the text changes while
+posting, copy the posted version back into the file.
+
 ## Section banners
 
 `cards/banner-*.png`, one per section of the Workshop page, from Shift
