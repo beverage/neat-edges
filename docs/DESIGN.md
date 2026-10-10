@@ -532,7 +532,13 @@ that one was never published.
   the band of the strip it continues, so their keylines, grooves and inner lips
   run on and join. It hardens nothing: it covers a corner, not an edge, and
   corner sealing already closes that corner from the two strips beside it. Its
-  rotation names the corner, as the corner piece's does.
+  rotation names the corner, as the corner piece's does. The name is the tile
+  games' one: autotiled maps call this notch the inner corner of the area being
+  edged, and the L its outer corner, where carpentry names the same place from
+  the wall and calls a wall jutting into a room an outside corner. A crossing of
+  runners shows why the tile reading suits a floor trim: its middle tile takes
+  four inside corners, one at each corner, and to a player they sit inside the
+  junction.
 - **A runner turning a corner is two pieces on one tile**: a corner for the
   outer rails and an inside corner for the inner joint. Neither is an edifice,
   so the engine lets them share the tile at every stage: blueprint placement

@@ -36,7 +36,8 @@ meets the boundary cleanly instead of being washed over.
 **Each shape is one button.** Left-click it to build the style it shows, or
 right-click it for the other styles; the one you pick stays on the button. Where a
 border turns around an inside corner, such as a wall jutting into the room, the
-inside corner piece fills the notch the two strips leave between them. The vine
+inside corner piece fills the notch the two strips leave between them; where
+runners cross, the middle tile takes four, one in each corner. The vine
 and the pebbles come in four patterns, and every tile of border draws one by
 where it lies, so a long path's edge never repeats on a beat.
 

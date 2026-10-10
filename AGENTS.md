@@ -246,6 +246,15 @@ corner. The extension with an empty list means all four edges, so "adding it
 with nothing in it" would harden a whole tile the piece only touches; the
 harness pins the absence (`trims.defs.*`).
 
+**The corner names follow tile games, not carpentry, and stay.** "Corner" and
+"inside corner" name corners of the floor being edged, as autotiled maps do:
+the corner piece sits on the floor's outer corner, and the inside corner on
+its inner corner, where the floor wraps around a wall jutting into the room or
+meets itself at a crossing of runners. Carpentry calls that jutting wall an
+outside corner, which is a reason to explain the name, not to change it:
+`InsideCorner` is a `TrimPiece.Kind` the README publishes for other mods'
+trims, so renaming it breaks their defs (DESIGN §9).
+
 **Every trim draws from its family's strip, and its geometry exists twice.**
 `Graphic_StripTrim` lays a strip from `Textures/NeatEdges/Trim/` out as
 geometry: a band along each edge the shape covers, cut at 45 degrees where two
