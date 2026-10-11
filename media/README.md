@@ -48,7 +48,7 @@ crop by hand where they disagree. Each card's numbers:
 | lab | screenshot, 724×726 | the walls' outer outline, x 72..656, y 73..657 (mirror axis 364.0) | 720×722 at +4+4 | 720×722 |
 | garden | screenshot, 901×802 | across: the rose bed, x 453.5; down: the beds' frames, y 238..566 (the mirror axis read 396.5, pulled up by the plant art) | 894×800 at +7+2 | 894×800 |
 | bar | screenshot from the main save, 944×651 | across: the mirror axis, x 471.5; down: kept as framed | 942×651 at +0+0 | 942×651 |
-| anima-garden | screenshot, 929×923 | the walls' outer outline, x 112..818, y 110..816 (centre 465.5, 463.5), framed so the four outer braziers sit in the corners (the mirror axis read low, pulled by the grass and the flames) | 719×721 at +106+103 | 719×721 |
+| anima-garden | bridge capture of cells 32..60 × 110..138 at root size 19.81 (26.14 px per cell, 758×759); under Camera+ the scale is not proportional to root size, so it was stepped to the scale of the hand screenshot it replaced | the walls' outer outline, cells 33..59 × 111..137, with the replaced card's margins (6 px across, 7 down), so the four outer braziers sit in the corners | 719×721 at +20+19 | 719×721 |
 | purple-bedroom | screenshot, 533×501, zoomed out far enough that the bed's owner label is not drawn | the purple carpet corridors, x 81..111 and 423..453, y 80..110 and 391..421 (the mirror axes agree, 267.5 and 251.0) | 531×500 at +2+1 | 531×500 |
 
 The church, lab, garden and bar screenshots are about 42 px per cell; the
@@ -60,6 +60,8 @@ silver columns. So are the anima garden and the purple bedroom. The anima
 garden is an octagon of totemic boards round an anima tree and its grass, each
 quadrant ringed inside and out in one trim style (gold inlay, vine painted
 pastel green, slate pebbles, wood painted dark mauve), on granite flagstone.
+At each corner the grass meets the boards on the diagonal, in NANAME Floors'
+triangle tiles trimmed in that quadrant's style.
 The purple bedroom and its corridors are deep purple fine carpet edged in
 inlay.
 
