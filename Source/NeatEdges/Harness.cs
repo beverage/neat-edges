@@ -144,7 +144,9 @@ namespace NeatEdges
             Guard("render.junction", () => CaseJunctionCornerLit(map));
             Guard("render.junctionZone", () => CaseJunctionZoneOnly(map));
             Guard("render.relight", () => CaseRelightPinKept(map));
-            Guard("render.taper", () => CaseTaperPinKept(map));
+            Guard("render.taper", () => CaseTaperCornerLit(map));
+            Guard("render.loneEndSpike", () => CaseLoneEndSpikeKept(map));
+            Guard("render.borderEnd", () => CaseBorderEndLit(map));
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("trims.stack", () => CaseTrimStack(map));
@@ -653,13 +655,16 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// The neighbour's taper keeps its pin too. Two steel tiles in soil,
-        /// only the east one hardened on its south edge: the west tile's shared
-        /// corner is sealed so its soft fade tapers out before the hard edge
-        /// starts. Its open side at that corner is clean floor, not soil, so
-        /// lighting the corner would put soil against the hardened tile.
+        /// The tile beyond a lone hardened edge's end fades along its open edge
+        /// all the way (v1.1.1). Two steel tiles in soil, only the east one
+        /// hardened on its south edge: soil fades onto the west tile from below,
+        /// across an edge nobody hardened. Until v1.1.1 the west tile's shared
+        /// corner kept its pin, so that fade tapered to nothing at the corner and
+        /// the first half of the open edge read as hard; the corner is a lone
+        /// end, and lit now. The premise is checked first, so a change to corner
+        /// sealing reads as that and not as the corner's light.
         /// </summary>
-        internal static void CaseTaperPinKept(Map map)
+        internal static void CaseTaperCornerLit(Map map)
         {
             TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil");
             if (Single == null || floor == null || soil == null) { Skip("render.taper", "a def is missing"); return; }
@@ -674,9 +679,87 @@ namespace NeatEdges
             Place(map, o, Single, Rot4.South);
 
             IntVec3 west = o + IntVec3.West;
+            int layout = Patch_SidedFadeBlock.EdgeMaskAt(west, map);
+            Check(layout == (1 << 7), "render.taper.layoutSeals",
+                $"the layout should seal only the west tile's SE (the premise); got {Show(layout)}");
             int render = Patch_SidedFadeBlock.RenderMaskAt(west, map);
-            Check(render == (1 << 7), "render.taper.kept",
-                $"west tile got {Show(render)}, expected only SE");
+            Check(render == 0, "render.taper.lit",
+                $"west tile got {Show(render)}, expected nothing pinned");
+            Clear();
+        }
+
+        /// <summary>
+        /// A lone end still keeps its pin against a diagonal spike. The taper's
+        /// layout with sand under the hardened tile: sand reaches the west tile's
+        /// shared corner only by the diagonal, round the end of the edge that
+        /// holds it back, and the soil fading in from below must not take the pin
+        /// with it.
+        /// </summary>
+        internal static void CaseLoneEndSpikeKept(Map map)
+        {
+            TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil"), sand = Terrain("Sand");
+            if (Single == null || floor == null || soil == null || sand == null)
+            {
+                Skip("render.loneEndSpike", "a def is missing");
+                return;
+            }
+            if (sand.renderPrecedence < floor.renderPrecedence || sand.edgeType == TerrainDef.TerrainEdgeType.Hard)
+            {
+                Skip("render.loneEndSpike", "sand no longer fades onto steel tile, so there is no spike to hold back");
+                return;
+            }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 3, o.z - 2, o.x + 2, o.z + 2);
+            if (Covered(map, block)) { Skip("render.loneEndSpike", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.FromLimits(o.x - 1, o.z, o.x, o.z), floor);
+            Paint(map, CellRect.SingleCell(o + IntVec3.South), sand);
+            Place(map, o, Single, Rot4.South);
+
+            int render = Patch_SidedFadeBlock.RenderMaskAt(o + IntVec3.West, map);
+            Check(render == (1 << 7), "render.loneEndSpike.kept",
+                $"west tile got {Show(render)}, expected only SE: sand's spike reaches the corner");
+            Clear();
+        }
+
+        /// <summary>
+        /// The play test's layout, which found the taper: rich soil beside soil
+        /// along a straight boundary, and one straight floor border on the soil
+        /// tile, hugging the boundary, that stops a tile short. Soil outranks
+        /// rich soil, so soil fades onto the rich tile beyond the border's end,
+        /// across the edge the border stops short of; that tile's corner at the
+        /// border's end is a lone end, and lit.
+        /// </summary>
+        internal static void CaseBorderEndLit(Map map)
+        {
+            TerrainDef soil = Terrain("Soil"), rich = Terrain("SoilRich");
+            ThingDef border = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorder");
+            if (border == null || soil == null || rich == null) { Skip("render.borderEnd", "a def is missing"); return; }
+            if (soil.renderPrecedence <= rich.renderPrecedence)
+            {
+                Skip("render.borderEnd", "soil no longer outranks rich soil, so the fade runs the other way");
+                return;
+            }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 2, o.z - 2, o.x + 2, o.z + 3);
+            if (Covered(map, block)) { Skip("render.borderEnd", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.FromLimits(o.x - 2, o.z - 2, o.x - 1, o.z + 3), rich);
+            Place(map, o, border, Rot4.West);
+
+            IntVec3 beyond = o + IntVec3.North + IntVec3.West;
+            int layout = Patch_SidedFadeBlock.EdgeMaskAt(beyond, map);
+            Check(layout == (1 << 7), "render.borderEnd.layoutSeals",
+                $"the layout should seal only the rich tile's SE, at the border's end (the premise); got {Show(layout)}");
+            int render = Patch_SidedFadeBlock.RenderMaskAt(beyond, map);
+            Check(render == 0, "render.borderEnd.lit",
+                $"the rich tile beyond the border's end got {Show(render)}, expected nothing pinned");
             Clear();
         }
 

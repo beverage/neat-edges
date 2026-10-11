@@ -96,7 +96,15 @@ in a hard line there. `RenderMaskAt` drops a pin only when every fade reaching
 that corner comes through an open side of its own terrain, no open side there
 is a seam inside the cell's own surface, and no hardened edge there holds the
 fade's terrain back (DESIGN §4). It replays diagonals unsubstituted, because
-dropping a pin un-substitutes its diagonal in the renderer too.
+dropping a pin un-substitutes its diagonal in the renderer too. **At the lone
+end of a hardened edge only the first condition counts** (`LoneEnd`, since
+v1.1.1): a border that stops partway along a boundary leaves the edge beyond it
+open, and the second condition used to keep that corner's pin, so the fade
+across the open edge tapered to nothing there and its first third read as hard.
+Only the edges a player hardened may read as hard; the price is a short straight
+line where that fade meets the ground the border keeps clean, measured in the lab
+before choosing it. A terrain reaching the corner only by the diagonal still
+keeps the pin (`render.loneEndSpike`).
 **Keep `EdgeMaskAt` a pure function of the marker layout** — the harness's mask
 cases assert exactly that — and put anything that reads terrain in the render
 step, whose cases paint terrain fixtures.

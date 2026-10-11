@@ -146,13 +146,31 @@ every fade reaching that corner:
   sealing is for);
 - finds **no open side at the corner that is a seam inside the cell's own
   surface**, where a lit corner beside a neighbour pinned clean would cut the
-  fade off in a straight line (the taper beside a lone edge keeps its pin: its
-  open side there is the same floor). An open side of the fade's own terrain,
-  or of any terrain different from the cell's, is already a boundary, and a lit
+  fade off in a straight line. An open side of the fade's own terrain, or of
+  any terrain different from the cell's, is already a boundary, and a lit
   corner cuts nothing new there;
 - and finds **no hardened edge at the corner holding that same terrain back**
   (the re-lit corner above, where the hardened edge holds back the soil that
   re-lights it, keeps its pin).
+
+**At the lone end of a hardened edge only the first rule counts** (v1.1.1). A
+lone end is a corner where both of the cell's own edges are open and, of the two
+neighbours' edges that run on from them past the corner, exactly one is
+hardened: what a border leaves on the tile beyond its end when it stops partway
+along a boundary. The second rule kept that pin, because the cell's other side
+there is its own ground, which the border keeps clean. So the fade across the
+open edge, one nobody hardened, tapered to nothing at the corner, and the first
+third of the edge read as hard. A play test found it as a hard edge reaching a
+third of a tile past a straight border's end.
+
+Lighting the corner trades that for a short straight line at the border's end,
+where the fade meets the clean ground beside it. It was chosen after a lab run of
+the reported layout, keep against lit against a half-lit corner, on soil against
+rich soil and again on sand against rich soil, where both artifacts show plainly
+(the lit line peaks at 53/255 there). Only the edges a player hardened read as
+hard. The first rule still holds at a lone end: a terrain reaching the corner
+only by the diagonal, round the border's end, keeps the pin. Two hardened edges
+meeting at a corner from outside it are not a lone end, and keep every rule.
 
 The replay reads the cardinals substituted and each diagonal as built. The
 renderer substitutes every direction whose bit is in the mask it is handed,
