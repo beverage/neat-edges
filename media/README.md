@@ -10,7 +10,7 @@ an allowlist that leaves `media/` behind. Commands run from this folder.
 | `hard-edges.gif` | the store card: soft edges, a fade to hard, and back |
 | `hard-edges-before.png`, `hard-edges-after.png` | its two frames at 640×360 |
 | `hard-edges-pair.png` | the two frames side by side |
-| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar, anima garden, purple bedroom, and the two trim swatches |
+| `cards/card-*.png` | gallery cards: bedrooms, church, lab, garden, bar, anima garden, purple bedroom, fields, and the two trim swatches |
 | `captures/` | every source the above were made from |
 
 ## hard-edges.gif
@@ -49,10 +49,11 @@ crop by hand where they disagree. Each card's numbers:
 | garden | screenshot, 901×802 | across: the rose bed, x 453.5; down: the beds' frames, y 238..566 (the mirror axis read 396.5, pulled up by the plant art) | 894×800 at +7+2 | 894×800 |
 | bar | screenshot from the main save, 944×651 | across: the mirror axis, x 471.5; down: kept as framed | 942×651 at +0+0 | 942×651 |
 | anima-garden | bridge capture of cells 32..60 × 110..138 at root size 19.81 (26.14 px per cell, 758×759); under Camera+ the scale is not proportional to root size, so it was stepped to the scale of the hand screenshot it replaced | the walls' outer outline, cells 33..59 × 111..137, with the replaced card's margins (6 px across, 7 down), so the four outer braziers sit in the corners | 719×721 at +20+19 | 719×721 |
+| fields | bridge capture of cells 138..156 × 24..42 at root size 16.0 (43.4 px per cell, 824×825), lighting overlay on | the four braziers, one in each corner cell; the capture is the frame | none | 824×825 |
 | purple-bedroom | screenshot, 533×501, zoomed out far enough that the bed's owner label is not drawn | the purple carpet corridors, x 81..111 and 423..453, y 80..110 and 391..421 (the mirror axes agree, 267.5 and 251.0) | 531×500 at +2+1 | 531×500 |
 
 The church, lab, garden and bar screenshots are about 42 px per cell; the
-bedroom capture is 65, the anima garden 26 and the purple bedroom 31. The
+bedroom capture is 65, the anima garden 26, the fields 43 and the purple bedroom 31. The
 church, lab and garden are in the media sandbox: slate walls and paving; the
 garden's beds in limestone trims with corn, potatoes, strawberries and roses;
 the rooms north and south of it in marine fine carpet with silver trims and
@@ -61,7 +62,10 @@ garden is an octagon of totemic boards round an anima tree and its grass, each
 quadrant ringed inside and out in one trim style (gold inlay, vine painted
 pastel green, slate pebbles, wood painted dark mauve), on granite flagstone.
 At each corner the grass meets the boards on the diagonal, in NANAME Floors'
-triangle tiles trimmed in that quadrant's style.
+triangle tiles trimmed in that quadrant's style. The fields are a devilstrand bed
+on rich soil between two cotton fields on soil, among limestone flagstone paths
+that meet the beds on the diagonal in NANAME triangle tiles, every bed edged in
+limestone pebbles (113 pieces, diagonals included).
 The purple bedroom and its corridors are deep purple fine carpet edged in
 inlay.
 
