@@ -5,6 +5,7 @@ devtools/run-harness.sh              # alongside whatever is already running
 devtools/run-harness.sh --full       # your own mod list, copied
 devtools/run-harness.sh --exclusive  # refuse if any RimWorld is up
 devtools/run-harness.sh --with owlchemist.perspectivepaths  # plus one mod
+devtools/run-harness.sh --with oels.nanamefloors --with chaoticenrico.smoothterrain
 ```
 
 Builds Release with the harness compiled in (`-p:Harness=true`), launches an
@@ -115,6 +116,15 @@ terrain back.
 | `yield.markerStays` | the marker's build tool shows in both runs |
 | `yield.handBackIntoItsZone` | with it, our area moves into the zone it made when the map finalized: every tile arrives, ours is gone, and our model stops hardening those tiles |
 | `yield.handBackMakesItsZone` | the same when it has no zone yet: one is made through its own constructor, and it is the one its lookup by label finds |
+| `naname.coverPatch` | with NANAME Floors loaded, the transpiler on its cover method found its one anchor |
+| `naname.crisp.untouched` | the control: a soft diagonal tile no hard edge touches is drawn through its soft mask, so the reads below are reading something |
+| `naname.crisp.markerOnTile`, `markerAcross`, `paintedTile`, `paintedBeside`, `diagonalTrim` | one each of the ways a hard edge runs along a tile: a marker on it, a marker across its edge, the painted area on it and beside it, and a diagonal trim on it. Each draws the tile's second quad through NANAME's hard half-tile mask |
+| `naname.crisp.cornerOnly`, `cornerOnlyBorder` | an edge that only ends at the tile's corner leaves it soft: a marker's edge, and a straight floor border's, on the tile diagonally south-west. The border is the layout the play test found, where crisping on the sealed corner turned one tile of a soft run into a hard line. `cornerOnlyPremise` checks first that the marker's layout seals that corner and nothing else |
+| `naname.crisp.halfBlendBig` | Smooth Terrain's other soft shape turns crisp the same way |
+| `naname.crisp.suppressed` | with the compare toggle on, a touched tile stays soft |
+| `naname.crisp.hardMaskLeftAlone` | a tile already drawn through a hard mask keeps NANAME's own material, not a copy |
+| `naname.crisp.sharedMaterial` | two touched tiles of one def are drawn with one crisp material, so the section still draws them in one call |
+| `naname.crisp.floorKeepsColour` | a painted diagonal floor keeps its colour and texture when it turns crisp |
 
 Each case clears its fixtures first, painted areas and painted terrain included. With two-sided
 hardening and corner sealing, a stray marker reaches beyond its own cell, so
@@ -236,3 +246,18 @@ harness.
 (DESIGN §8). The transpiler report shows it: with it loaded, the vert anchor
 reads five higher than without (496 against 491 on the minimal list), which is
 its insertion.
+
+**NANAME Floors** transpiles the same method too, inserting the call that draws
+a diagonal tile's second terrain, and Neat Edges patches that call's method in
+turn (DESIGN §10). The `naname.*` cases need it and Smooth Terrain, which ships
+the soft masks, so they skip on the default list and run with both:
+
+```bash
+devtools/run-harness.sh --with oels.nanamefloors --with chaoticenrico.smoothterrain
+```
+
+Each case reads the mask off the submesh that holds the tile's second quad after
+regenerating the section, so it tests what the patched methods built, not what
+the interop says it would do. Its fixture is the first clear 5×5 out from the
+map's centre, so a random map's rock cannot skip it. Whether the crisp line
+LOOKS right, under a diagonal trim and beside a painted floor, is a screenshot.

@@ -8,7 +8,7 @@ changes how *other* people's floors meet what they touch.
 | Doc | Contents |
 |---|---|
 | [README.md](README.md) | what the mod does, for players |
-| [docs/DESIGN.md](docs/DESIGN.md) | the blend gate, the three mechanisms, why sided rather than area, the painted area and its migration, the trims |
+| [docs/DESIGN.md](docs/DESIGN.md) | the blend gate, the three mechanisms, why sided rather than area, the painted area and its migration, the trims, NANAME Floors' diagonal tiles |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | build, dev loop, file map |
 | [docs/TESTING.md](docs/TESTING.md) | the harness, and what it deliberately does not cover |
 
@@ -210,6 +210,55 @@ removal: a saved area whose class is missing costs the map its whole area
 list (DESIGN §8), so clearing every tile is how a player makes a map safe to
 remove this mod from. Keep both paths, and keep anything that holds the area
 across a clear tolerant of it leaving the list.
+
+## Diagonal tiles: NANAME Floors and Smooth Terrain
+
+**A NANAME tile is the tile's own terrain, not a fade.** NANAME Floors puts two
+terrains in one tile as a def of its own and draws the second as an extra quad,
+through a mask, from a call it inserts into `Regenerate`. Smooth Terrain's
+rounded corners are those tiles, in two soft masks of its own. Nothing in
+`Patch_SidedFadeBlock` sees that quad, so `NanameInterop` patches NANAME's
+cover method instead, and the rest of this mod is unchanged by it.
+
+**Crisp, never square.** Where a hard edge runs along a tile drawn through a soft
+mask, the quad is drawn through NANAME's own hard half-tile mask: the same
+split on the tile's true diagonal, where a diagonal trim's band runs. Squaring
+the tile off was considered and rejected (decided 2026-10-11): under a run of
+diagonal trims it would put a staircase back under the band, and which of its
+two terrains a tile was before Smooth Terrain split it is recorded nowhere.
+
+**"Runs along" is the layout mask's edge bits, `EdgeMaskAt & AllCardinals`,
+being non-zero.** Not `RenderMaskAt`: dropping a pin is about which vanilla
+fades reach a corner, and the second quad is not a fade. A marker, trim or
+painted tile on the tile or across one of its edges counts, and so does a
+diagonal trim on it, which hardens all four. **A sealed corner does not**, and
+must not: the first rule counted the whole mask, and in play a straight border
+that merely stopped at a soft tile's corner turned that one tile of a Smooth
+Terrain run into a hard line. Nothing hard runs along such a tile, so its soft
+split crosses no hard edge. The harness pins both (`naname.crisp.cornerOnly`,
+`cornerOnlyBorder`).
+
+**Only the material changes.** The crisp material is a copy of the one NANAME
+chose, with the mask swapped, made once per material and shared by every tile
+drawn with it. No def is made, nothing is scribed and the terrain grid is never
+written, so removing either mod leaves nothing behind. Keep it that way: a
+crisp tile made by writing a different def into the grid would outlive the
+hard edge that asked for it.
+
+**The soft masks are named, not detected.** `NanameInterop.CrispMasks` maps
+Smooth Terrain's `HalfBlend` and `HalfBlendBig` to NANAME's `HalfTriangle`. A
+mask not in the table draws as it is, so another mod's soft shape keeps its
+own look rather than becoming a half. A new soft diagonal shape needs a line
+there and a harness case.
+
+**The patch fails closed and is applied by hand.** It is a transpiler with one
+anchor, the cover method's only `GetSubMesh` call, inserting a pass-through
+before it; anything else leaves the method untouched and the startup line says
+so. It is applied from `HarmonyInit` only while NANAME is installed, because
+`PatchAll` would try to resolve a class a player without it does not have.
+Only the terrain layer and the water layer under it are crisped: NANAME also
+draws covers for As Above So Below's views of a level below, and nothing here
+hardens those.
 
 ## Scope rules
 

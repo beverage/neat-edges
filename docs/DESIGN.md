@@ -704,3 +704,78 @@ that one was never published.
   should say which version it needs. The harness pins each part as the mod's
   own trims use it (`trims.render.*`, `trims.geometry`, `trims.strip.*`,
   `trims.buttons.*`, `trims.joins.*`).
+
+## 10. Diagonal tiles: NANAME Floors and Smooth Terrain
+
+NANAME Floors puts two terrains in one tile, split along a mask: its own terrain
+def holds a base terrain, a cover terrain, a mask and a rotation naming the
+cover's corner. The vanilla quad draws the base, and a call NANAME inserts into
+`Regenerate`, at the head of the loop over fades, draws the cover as a second
+quad of the tile through the mask. Players build these as diagonal floors
+through NANAME's shape picker. Smooth Terrain makes them on its own: when a map
+is generated, or when a player presses its "Smooth current map", every cell
+whose neighbours on two sides and the diagonal between them are one other
+natural terrain it pairs with, and whose other two sides are its own, becomes a
+tile of the two, the other terrain in that corner. Cells go in the
+order of their x and then their z, and a cell is left whole if a neighbour
+already split shares its row or column, or sits diagonally with a different
+split. So a staircase edge turns into a chain of diagonal tiles, and a blob's
+corners round off, outside or inside depending on which cell of each corner the
+order reaches first.
+
+**None of the fade-blocking reaches them.** The split is the tile's own
+terrain, not a fade from a neighbour, so substitution and pinning (§4) have
+nothing to act on; NANAME's def is also hard-edged, so the tile never fades
+out. Smooth Terrain's two masks are soft: HalfBlend shades the cover off over
+most of the tile, with its midpoint about a fifth of a tile off the diagonal
+toward the cover's corner, and HalfBlendBig centres on the diagonal. So the
+gradient ran up to a painted tile beside it, and showed on both sides of a
+diagonal trim laid on the tile, which already stopped every fade around it.
+
+**The fix makes the split crisp where a hard edge runs along the tile.** That is
+one of the tile's four edges hardened from either side, the layout mask's edge
+bits (`EdgeMaskAt & AllCardinals`): a marker or trim on the tile or across one
+of its edges, the painted area on or beside it, or a diagonal trim on it, which
+hardens all four. Such a tile has its cover drawn through NANAME's own hard
+half-tile mask, HalfTriangle, which is exact from corner to corner.
+
+A corner a neighbour's edge seals does not count. The first rule took the whole
+mask, corner bits included, and the play test found what that does: a straight
+border running up to a soft tile's corner, and stopping there, turned that one
+tile of a Smooth Terrain run into a hard line, although no hard edge crosses
+its split.
+
+Two alternatives were tried on paper and rejected (decided 2026-10-11):
+
+- **Squaring the tile off**, drawing it as one of its two terrains. Under a run
+  of diagonal trims that puts a staircase back under the band, and which of the
+  two terrains a cell was before Smooth Terrain split it is recorded nowhere:
+  its own un-smoothing picks one at random.
+- **Cutting the soft mask at its own midpoint**, which keeps HalfBlend's smaller
+  wedge. The line would then run a fifth of a tile beside a diagonal trim's band
+  instead of under it, and a diagonal wall's face sits on the true diagonal too.
+
+So a crisp tile is exactly half and half, a diagonal stays a diagonal, and only
+the tiles a hard edge runs along change.
+
+**The patch is a transpiler on NANAME's cover method, with one anchor.** Just
+before the method asks for its submesh, the material it chose goes through
+`NanameInterop.CoverMaterial`, which hands back a crisp copy where the tile is
+touched and the material itself everywhere else. The copy keeps the shader, the
+texture, the colour, the render queue and the noise texture a rough terrain's
+edge is drawn through, and changes the mask alone, so a painted diagonal floor
+keeps its paint. One copy is made per material and shared by every tile drawn
+with it, so a section still draws each in one call. The method's only
+`GetSubMesh` call is the anchor; anything else leaves the method untouched, and
+the startup line says which. The patch is applied by hand from `HarmonyInit`
+while NANAME is installed, since `PatchAll` would try to resolve a class a
+player without it does not have.
+
+**Its limits are deliberate.** The soft masks are named, Smooth Terrain's two,
+rather than detected: a mask not in the table draws as it is, so a shape some
+other mod adds keeps its own look rather than becoming a half. Only the terrain
+layer and the water layer under it are crisped; NANAME also draws covers for As
+Above So Below's views of a level below, and nothing in this mod hardens those.
+Nothing is written to the terrain grid, no def is made and nothing is saved, so
+a hard edge removed takes its crisp line with it, and removing either mod
+leaves nothing behind.
