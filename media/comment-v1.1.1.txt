@@ -1,0 +1,9 @@
+v1.1.1 update:
+
+Tiles that NANAME Floors or Smooth Terrain split diagonally now draw a crisp diagonal under a hard edge or border, instead of a soft blend.
+
+A hard edge or border that stops partway no longer hardens the open edge past its end.
+
+NANAME Floors and Smooth Terrain are now on the recommended list.
+
+Hard edges and borders you have already built load as they are and harden the same edges.

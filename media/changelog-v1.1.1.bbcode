@@ -1,0 +1,6 @@
+[list]
+[*]Fix: tiles that NANAME Floors or Smooth Terrain split diagonally between two terrains no longer blend past a hard edge. Where one of the tile's edges is hardened, by a hard edge, a floor border or a hard edge area, or a diagonal border lies on it, the split now draws as a crisp line along the tile's diagonal, the line a diagonal border's band and a diagonal wall follow, instead of a soft blend. A hard edge that only reaches the tile's corner leaves it soft.
+[*]Fix: a hard edge or floor border that stops partway along the line between two terrains no longer hardens the open edge past its end. That edge read as hard for about a third of a tile before it began to fade; it now fades along its whole length. Where two hardened edges meet, the corner still seals as before.
+[*]NANAME Floors and Smooth Terrain are now listed under "Recommended with", on this page and in the description in RimWorld's mod list.
+[*]Unchanged: Neat Edges still requires only Harmony, no defs changed, and nothing new is saved. Hard edges, areas and borders already in your saves load as they are and harden the same edges.
+[/list]
