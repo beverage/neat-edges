@@ -259,6 +259,7 @@ ground: granite pebbles on granite flagstone show nothing.
 | `Designator_AreaHardEdges.cs` | its paint and clear tools |
 | `Patch_AreaMigration.cs` | loads Perspective: Paths' saved areas as ours, and announces it once |
 | `PerspectivePathsInterop.cs` | the other direction, while it is installed: hides the area tools and moves our area into its zone |
+| `NanameInterop.cs` | while NANAME Floors is installed: the transpiler on its cover method that draws a soft diagonal tile crisp where a hard edge runs along it |
 | `MapComponent_EdgeOverlay.cs` | the overlay drawer, and the area's load-time housekeeping |
 | `Patch_EdgeOverlayToggle.cs` | puts it on the bottom-right toggle row |
 | `DebugTools_NeatEdges.cs` | the compare toggle |
@@ -307,3 +308,11 @@ no job — which places instantly and leaves nothing to cancel.
 
 **The transpiler is anchored, not copied.** Re-diff its anchors against the
 decompile on a game update; the mask logic is ordinary C# and moves freely.
+
+**A NANAME tile is not a fade, and nothing in the fade code can see it.** NANAME
+Floors draws a diagonal tile's second terrain as a quad of its own, through a
+mask, from a call it inserts into `Regenerate`; Smooth Terrain's rounded corners
+are those tiles too. A soft one keeps its gradient beside any hard edge unless
+`NanameInterop`'s patch on NANAME's cover method applied, and the startup log
+says whether it did. Its anchor is NANAME's, not the game's, so re-check it when
+NANAME updates.

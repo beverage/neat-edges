@@ -13,6 +13,10 @@ namespace NeatEdges
     ///   <see cref="Patch_EdgeOverlayToggle"/>    the bottom-right overlay toggle
     ///   <see cref="Patch_AreaMigration"/>        answers a save's type lookup for Perspective:
     ///                                            Paths' area, and only when nothing else did
+    ///   <see cref="NanameInterop"/>              transpiler on NANAME Floors' cover method,
+    ///                                            applied by hand and only while it is
+    ///                                            installed; passes the method through
+    ///                                            untouched if its anchor is missing
     ///
     /// The trims need no patch: <see cref="Graphic_StripTrim"/> never offers its
     /// strip to the static atlas. (Until 2026-10 a fifth patch, applied from a
@@ -26,7 +30,9 @@ namespace NeatEdges
 
         static HarmonyInit()
         {
-            new Harmony(Id).PatchAll();
+            Harmony harmony = new Harmony(Id);
+            harmony.PatchAll();
+            NanameInterop.Patch(harmony);
 
             // One line, every start. The transpiler's worst failure produced no
             // error and no warning — it anchored onto a store that exists twice
@@ -36,6 +42,16 @@ namespace NeatEdges
             Log.Message("[NeatEdges] terrain edge patch "
                 + (Patch_SidedFadeBlock.Applied ? "applied" : "NOT APPLIED")
                 + " — " + (Patch_SidedFadeBlock.AnchorReport ?? "transpiler never ran"));
+
+            // And one more while NANAME Floors is installed, for the same
+            // reason: a missed anchor leaves its soft tiles soft, which looks
+            // exactly like the mod not being there.
+            if (NanameInterop.Installed)
+            {
+                Log.Message("[NeatEdges] NANAME Floors diagonal tile patch "
+                    + (NanameInterop.CoverApplied ? "applied" : "NOT APPLIED, so soft diagonal tiles stay soft")
+                    + " — " + (NanameInterop.CoverReport ?? "transpiler never ran"));
+            }
         }
     }
 }

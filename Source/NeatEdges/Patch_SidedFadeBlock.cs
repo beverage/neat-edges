@@ -432,6 +432,13 @@ namespace NeatEdges
         /// end of one. A fade that reaches the corner only by the diagonal keeps
         /// its pin: that spike is what corner sealing is for.
         ///
+        /// At the lone end of a hardened edge (<see cref="LoneEnd"/>) only that
+        /// last rule counts, so only the edges a player hardened read as hard:
+        /// the open edge a border stops short of fades along its whole length.
+        /// The cost is a short straight line where that fade meets the ground
+        /// the border keeps clean, at the border's end, which the lab measured
+        /// before choosing it (v1.1.1).
+        ///
         /// Kept apart from EdgeMaskAt on purpose. That one stays a pure function
         /// of the marker layout, which is what the harness's mask cases assert;
         /// this one also reads terrain, and its cases build terrain to read.
@@ -439,7 +446,7 @@ namespace NeatEdges
         internal static int RenderMaskAt(IntVec3 cell, Map map, OwnMaskCache cache = null)
         {
             int mask = EdgeMaskAt(cell, map, cache);
-            return (mask & AllDiagonals) == 0 ? mask : mask & ~IdlePins(cell, map, mask);
+            return (mask & AllDiagonals) == 0 ? mask : mask & ~IdlePins(cell, map, mask, cache);
         }
 
         // Per-thread scratch for IdlePins, which runs once per cell with a sealed
@@ -469,7 +476,7 @@ namespace NeatEdges
         /// kept a diagonal sand spike off its corner, because the lichen fading
         /// in from below looked like the only thing reaching it.
         /// </summary>
-        internal static int IdlePins(IntVec3 cell, Map map, int mask)
+        internal static int IdlePins(IntVec3 cell, Map map, int mask, OwnMaskCache cache = null)
         {
             CellTerrain[] raw = rawScratch ?? (rawScratch = new CellTerrain[8]);
             CellTerrain[] shown = shownScratch ?? (shownScratch = new CellTerrain[8]);
@@ -517,6 +524,7 @@ namespace NeatEdges
                 int q = (d + 1) % 8;
                 bool lit = false;
                 bool needed = false;
+                bool loneEnd = LoneEnd(cell, d, mask, map, cache);
 
                 for (int f = 0; f < fanCount && !needed; f++)
                 {
@@ -526,8 +534,9 @@ namespace NeatEdges
 
                     lit = true;
                     needed = !(viaP || viaQ)
-                        || !SideLetsLight(p, fans[f], self, mask, raw, shown)
-                        || !SideLetsLight(q, fans[f], self, mask, raw, shown);
+                        || (!loneEnd
+                            && (!SideLetsLight(p, fans[f], self, mask, raw, shown)
+                                || !SideLetsLight(q, fans[f], self, mask, raw, shown)));
                 }
 
                 if (lit && !needed) idle |= 1 << d;
@@ -536,8 +545,36 @@ namespace NeatEdges
         }
 
         /// <summary>
+        /// Whether corner <paramref name="d"/> is sealed by nothing but the end
+        /// of one hardened edge: both of the cell's own edges at that corner are
+        /// open, and of the two neighbours' edges that run on from them past the
+        /// corner, exactly one is hardened. A border that stops partway along a
+        /// terrain boundary leaves this corner on the tile beyond its end.
+        ///
+        /// There the edge the border would have continued is open, so a fade
+        /// across it is one nobody hardened, and it runs right down to the
+        /// corner: only <see cref="IdlePins"/>' diagonal rule still keeps the
+        /// pin. Until v1.1.1 the corner stayed sealed and that fade tapered to
+        /// nothing at it, so the first part of the open edge read as hard. Two
+        /// hardened edges meeting at the corner from outside it are not a lone
+        /// end, and keep every rule.
+        /// </summary>
+        internal static bool LoneEnd(IntVec3 cell, int d, int mask, Map map, OwnMaskCache cache)
+        {
+            int p = d - 1;
+            int q = (d + 1) % 8;
+            if ((mask & (1 << p)) != 0 || (mask & (1 << q)) != 0) return false;
+
+            IntVec3 pc = cell + GenAdj.AdjacentCellsAroundBottom[p];
+            IntVec3 qc = cell + GenAdj.AdjacentCellsAroundBottom[q];
+            bool viaP = pc.InBounds(map) && EdgeHardened(pc, q, map, cache);
+            bool viaQ = qc.InBounds(map) && EdgeHardened(qc, p, map, cache);
+            return viaP != viaQ;
+        }
+
+        /// <summary>
         /// Whether one side of a corner lets a fade of <paramref name="fan"/>
-        /// light it.
+        /// light it. Not asked at a lone end (<see cref="LoneEnd"/>).
         ///
         /// A hardened side must not be holding that same terrain back, or the
         /// fade would read as leaking round the end of the edge: the re-lit
@@ -545,11 +582,10 @@ namespace NeatEdges
         ///
         /// An open side must not be this cell's own terrain, unless it is the
         /// fade's. Across a seam inside one surface, a lit corner beside a
-        /// neighbour pinned clean is a fade cut off in a straight line: the
-        /// taper beside a lone hardened edge, which is why that neighbour's
-        /// corner is sealed. Across a boundary that is already a change of
-        /// terrain, the corner cuts nothing new; that is the lichen tile under a
-        /// painted floor tile, open to the floor above and to the sand beside.
+        /// neighbour pinned clean is a fade cut off in a straight line. Across a
+        /// boundary that is already a change of terrain, the corner cuts
+        /// nothing new; that is the lichen tile under a painted floor tile, open
+        /// to the floor above and to the sand beside.
         /// </summary>
         internal static bool SideLetsLight(int side, CellTerrain fan, CellTerrain self, int mask,
             CellTerrain[] raw, CellTerrain[] shown)

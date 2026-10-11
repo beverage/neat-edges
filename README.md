@@ -93,6 +93,14 @@ Works with any floor from any mod, alongside vanilla bridges, and with Dub's
 Paint Shop colours intact. Requires
 [Harmony](https://steamcommunity.com/workshop/filedetails/?id=2009463077).
 
+**With Smooth Terrain**, hard edges reach its diagonals too. Smooth Terrain
+rounds natural corners with NANAME Floors' diagonal tiles, and its two shapes
+blend a tile's two terrains softly across the tile. Wherever a hard edge runs
+along one of those tiles, the split is drawn hard along the tile's diagonal,
+which is where a diagonal border's band runs. Diagonal floors you build in those
+shapes get the same treatment. Every other tile keeps its soft blend, including
+one that a hard edge only reaches at a corner.
+
 You can add it to a running save. Before removing it, use **Clear hard edge
 area** on every map you painted: a save that still holds the area loses the
 map's whole area list, home area included. Clearing the last painted tile

@@ -144,7 +144,9 @@ namespace NeatEdges
             Guard("render.junction", () => CaseJunctionCornerLit(map));
             Guard("render.junctionZone", () => CaseJunctionZoneOnly(map));
             Guard("render.relight", () => CaseRelightPinKept(map));
-            Guard("render.taper", () => CaseTaperPinKept(map));
+            Guard("render.taper", () => CaseTaperCornerLit(map));
+            Guard("render.loneEndSpike", () => CaseLoneEndSpikeKept(map));
+            Guard("render.borderEnd", () => CaseBorderEndLit(map));
             Guard("trims.defs", CaseTrimDefs);
             Guard("trims.masks", () => CaseTrimMasks(map));
             Guard("trims.stack", () => CaseTrimStack(map));
@@ -170,6 +172,7 @@ namespace NeatEdges
             Guard("migration.countsPainted", () => CaseMigrationCountsPainted(map));
             Guard("yield.tools", () => CaseYieldTools(map));
             Guard("yield.handBack", () => CaseYieldHandBack(map));
+            Guard("naname", () => CaseNanameDiagonals(map));
 
             Report.AppendLine($"result: {Passed} passed, {Failed} failed, {Skipped} skipped");
             Log.Message(Report.ToString());
@@ -652,13 +655,16 @@ namespace NeatEdges
         }
 
         /// <summary>
-        /// The neighbour's taper keeps its pin too. Two steel tiles in soil,
-        /// only the east one hardened on its south edge: the west tile's shared
-        /// corner is sealed so its soft fade tapers out before the hard edge
-        /// starts. Its open side at that corner is clean floor, not soil, so
-        /// lighting the corner would put soil against the hardened tile.
+        /// The tile beyond a lone hardened edge's end fades along its open edge
+        /// all the way (v1.1.1). Two steel tiles in soil, only the east one
+        /// hardened on its south edge: soil fades onto the west tile from below,
+        /// across an edge nobody hardened. Until v1.1.1 the west tile's shared
+        /// corner kept its pin, so that fade tapered to nothing at the corner and
+        /// the first half of the open edge read as hard; the corner is a lone
+        /// end, and lit now. The premise is checked first, so a change to corner
+        /// sealing reads as that and not as the corner's light.
         /// </summary>
-        internal static void CaseTaperPinKept(Map map)
+        internal static void CaseTaperCornerLit(Map map)
         {
             TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil");
             if (Single == null || floor == null || soil == null) { Skip("render.taper", "a def is missing"); return; }
@@ -673,9 +679,87 @@ namespace NeatEdges
             Place(map, o, Single, Rot4.South);
 
             IntVec3 west = o + IntVec3.West;
+            int layout = Patch_SidedFadeBlock.EdgeMaskAt(west, map);
+            Check(layout == (1 << 7), "render.taper.layoutSeals",
+                $"the layout should seal only the west tile's SE (the premise); got {Show(layout)}");
             int render = Patch_SidedFadeBlock.RenderMaskAt(west, map);
-            Check(render == (1 << 7), "render.taper.kept",
-                $"west tile got {Show(render)}, expected only SE");
+            Check(render == 0, "render.taper.lit",
+                $"west tile got {Show(render)}, expected nothing pinned");
+            Clear();
+        }
+
+        /// <summary>
+        /// A lone end still keeps its pin against a diagonal spike. The taper's
+        /// layout with sand under the hardened tile: sand reaches the west tile's
+        /// shared corner only by the diagonal, round the end of the edge that
+        /// holds it back, and the soil fading in from below must not take the pin
+        /// with it.
+        /// </summary>
+        internal static void CaseLoneEndSpikeKept(Map map)
+        {
+            TerrainDef floor = Terrain("MetalTile"), soil = Terrain("Soil"), sand = Terrain("Sand");
+            if (Single == null || floor == null || soil == null || sand == null)
+            {
+                Skip("render.loneEndSpike", "a def is missing");
+                return;
+            }
+            if (sand.renderPrecedence < floor.renderPrecedence || sand.edgeType == TerrainDef.TerrainEdgeType.Hard)
+            {
+                Skip("render.loneEndSpike", "sand no longer fades onto steel tile, so there is no spike to hold back");
+                return;
+            }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 3, o.z - 2, o.x + 2, o.z + 2);
+            if (Covered(map, block)) { Skip("render.loneEndSpike", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.FromLimits(o.x - 1, o.z, o.x, o.z), floor);
+            Paint(map, CellRect.SingleCell(o + IntVec3.South), sand);
+            Place(map, o, Single, Rot4.South);
+
+            int render = Patch_SidedFadeBlock.RenderMaskAt(o + IntVec3.West, map);
+            Check(render == (1 << 7), "render.loneEndSpike.kept",
+                $"west tile got {Show(render)}, expected only SE: sand's spike reaches the corner");
+            Clear();
+        }
+
+        /// <summary>
+        /// The play test's layout, which found the taper: rich soil beside soil
+        /// along a straight boundary, and one straight floor border on the soil
+        /// tile, hugging the boundary, that stops a tile short. Soil outranks
+        /// rich soil, so soil fades onto the rich tile beyond the border's end,
+        /// across the edge the border stops short of; that tile's corner at the
+        /// border's end is a lone end, and lit.
+        /// </summary>
+        internal static void CaseBorderEndLit(Map map)
+        {
+            TerrainDef soil = Terrain("Soil"), rich = Terrain("SoilRich");
+            ThingDef border = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorder");
+            if (border == null || soil == null || rich == null) { Skip("render.borderEnd", "a def is missing"); return; }
+            if (soil.renderPrecedence <= rich.renderPrecedence)
+            {
+                Skip("render.borderEnd", "soil no longer outranks rich soil, so the fade runs the other way");
+                return;
+            }
+
+            Clear();
+            IntVec3 o = Origin(map);
+            CellRect block = CellRect.FromLimits(o.x - 2, o.z - 2, o.x + 2, o.z + 3);
+            if (Covered(map, block)) { Skip("render.borderEnd", "an edifice covers the fixture"); return; }
+
+            Paint(map, block, soil);
+            Paint(map, CellRect.FromLimits(o.x - 2, o.z - 2, o.x - 1, o.z + 3), rich);
+            Place(map, o, border, Rot4.West);
+
+            IntVec3 beyond = o + IntVec3.North + IntVec3.West;
+            int layout = Patch_SidedFadeBlock.EdgeMaskAt(beyond, map);
+            Check(layout == (1 << 7), "render.borderEnd.layoutSeals",
+                $"the layout should seal only the rich tile's SE, at the border's end (the premise); got {Show(layout)}");
+            int render = Patch_SidedFadeBlock.RenderMaskAt(beyond, map);
+            Check(render == 0, "render.borderEnd.lit",
+                $"the rich tile beyond the border's end got {Show(render)}, expected nothing pinned");
             Clear();
         }
 
@@ -2436,6 +2520,257 @@ namespace NeatEdges
             }
             Clear();
         }
+
+        // ---- NANAME Floors' diagonal tiles --------------------------------
+
+        /// <summary>
+        /// A NANAME tile drawn with a soft mask is drawn crisp where a hard edge
+        /// runs along one of its edges, and soft where none does, a hard edge
+        /// that only reaches a corner included (<see cref="NanameInterop"/>).
+        /// Needs NANAME Floors, and Smooth Terrain for its soft masks, so it
+        /// skips on the default list:
+        ///
+        ///     devtools/run-harness.sh --with oels.nanamefloors --with chaoticenrico.smoothterrain
+        ///
+        /// Every check builds one tile on sand, split with stony soil in its
+        /// south-west half, hardens it one way, regenerates the section's
+        /// terrain layer and reads which mask the tile's second quad was drawn
+        /// with, off the submesh that holds that quad. Reading the submesh
+        /// rather than asking the interop is the point: it is what the patched
+        /// method actually built, through NANAME's own drawing, so a missed
+        /// anchor or a stale material fails here.
+        /// </summary>
+        internal static void CaseNanameDiagonals(Map map)
+        {
+            if (!NanameInterop.Installed)
+            {
+                Skip("naname", "NANAME Floors is not loaded; run with --with oels.nanamefloors "
+                    + "--with chaoticenrico.smoothterrain");
+                return;
+            }
+            Check(NanameInterop.CoverApplied, "naname.coverPatch",
+                NanameInterop.CoverReport ?? "the cover transpiler never ran");
+
+            TerrainDef sand = Terrain("Sand"), gravel = Terrain("Gravel"), wood = Terrain("WoodPlankFloor");
+            ThingDef diagonal = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorderDiagonal");
+            ThingDef border = DefDatabase<ThingDef>.GetNamedSilentFail("NE_FloorBorder");
+            if (Single == null || diagonal == null || sand == null || gravel == null || wood == null)
+            {
+                Skip("naname.crisp", "a def is missing");
+                return;
+            }
+            TerrainDef soft = NanameBlend("HalfBlend", sand, gravel, Rot4.South);
+            TerrainDef softBig = NanameBlend("HalfBlendBig", sand, gravel, Rot4.South);
+            TerrainDef hard = NanameBlend("HalfTriangle", sand, gravel, Rot4.South);
+            TerrainDef softFloor = NanameBlend("HalfBlend", sand, wood, Rot4.South);
+            if (soft == null || softBig == null || softFloor == null)
+            {
+                Skip("naname.crisp", "no soft mask to test: Smooth Terrain, which ships them, is not loaded");
+                return;
+            }
+            if (hard == null)
+            {
+                Skip("naname.crisp", "NANAME Floors has no HalfTriangle mask, so there is nothing to draw crisp with");
+                return;
+            }
+
+            // The first clear 5x5 out from the map's centre, rather than the
+            // centre itself: a quicktest map is random, and a rock or a wall
+            // there would skip every check below, which reads like coverage
+            // in a report that only counts failures.
+            Clear();
+            IntVec3 o = IntVec3.Invalid;
+            CellRect block = default;
+            foreach (IntVec3 c in GenRadial.RadialCellsAround(Origin(map), 40f, true))
+            {
+                CellRect around = CellRect.FromLimits(c.x - 2, c.z - 2, c.x + 2, c.z + 2);
+                if (around.InBounds(map) && !Covered(map, around))
+                {
+                    o = c;
+                    block = around;
+                    break;
+                }
+            }
+            if (!o.IsValid) { Skip("naname.crisp", "no 5x5 within 40 cells of the centre is free of edifices"); return; }
+
+            // One tile of `def` at o, on sand, hardened by `harden`; returns
+            // the materials its second quad was drawn with.
+            List<Material> Build(TerrainDef def, Action harden)
+            {
+                Clear();
+                Paint(map, block, sand);
+                Paint(map, CellRect.SingleCell(o), def);
+                harden();
+                return CoverMaterials(map, o);
+            }
+
+            void Expect(string name, TerrainDef def, Action harden, string want)
+            {
+                List<string> masks = Build(def, harden).Select(MaskName).ToList();
+                Check(masks.Count > 0 && masks.All(m => m == want), "naname.crisp." + name,
+                    masks.Count == 0 ? "no second quad was drawn at the tile"
+                        : $"drawn with {string.Join(", ", masks)}, want {want}");
+                Clear();
+            }
+
+            Expect("untouched", soft, () => { }, "HalfBlend");
+            Expect("markerOnTile", soft, () => Place(map, o, Single, Rot4.West), "HalfTriangle");
+            Expect("markerAcross", soft, () => Place(map, o + IntVec3.West, Single, Rot4.East), "HalfTriangle");
+            Expect("paintedTile", soft, () => Area_HardEdges.GetOrCreate(map)[o] = true, "HalfTriangle");
+            Expect("paintedBeside", soft, () => Area_HardEdges.GetOrCreate(map)[o + IntVec3.North] = true, "HalfTriangle");
+            Expect("diagonalTrim", soft, () => Place(map, o, diagonal, Rot4.North), "HalfTriangle");
+            Expect("halfBlendBig", softBig, () => Place(map, o, Single, Rot4.West), "HalfTriangle");
+
+            // A hard edge that only ends at the tile's corner: the north edge
+            // of the tile diagonally south-west, which seals that corner and
+            // nothing else. Nothing hard runs along the tile, so it stays soft.
+            // The premise is checked first, so a change to corner sealing reads
+            // as that and not as the tile's look. Crisping on the sealed corner
+            // was the first rule, and in play it turned one tile of a soft
+            // Smooth Terrain run into a hard line where a straight floor border
+            // merely stopped at its corner: the second check is that layout.
+            Build(soft, () => Place(map, o + IntVec3.SouthWest, Single, Rot4.North));
+            int cornerOnly = Patch_SidedFadeBlock.EdgeMaskAt(o, map);
+            Clear();
+            Check(cornerOnly == (1 << 1), "naname.crisp.cornerOnlyPremise",
+                $"the layout should seal only the tile's south-west corner; got {Show(cornerOnly)}");
+            Expect("cornerOnly", soft, () => Place(map, o + IntVec3.SouthWest, Single, Rot4.North), "HalfBlend");
+            if (border == null) Skip("naname.crisp.cornerOnlyBorder", "NE_FloorBorder is missing");
+            else Expect("cornerOnlyBorder", soft, () => Place(map, o + IntVec3.SouthWest, border, Rot4.East), "HalfBlend");
+
+            DebugTools_NeatEdges.Suppressed = true;
+            try
+            {
+                Expect("suppressed", soft, () => Place(map, o, Single, Rot4.West), "HalfBlend");
+            }
+            finally
+            {
+                DebugTools_NeatEdges.Suppressed = false;
+            }
+
+            // A hard mask is NANAME's own business: hardened, it is drawn with
+            // NANAME's material, not a copy of it.
+            List<Material> hardDrawn = Build(hard, () => Place(map, o, Single, Rot4.West));
+            Clear();
+            Check(hardDrawn.Count > 0 && hardDrawn.All(m => MaskName(m) == "HalfTriangle" && !m.name.EndsWith("(crisp)")),
+                "naname.crisp.hardMaskLeftAlone",
+                $"drawn with {string.Join(", ", hardDrawn.Select(m => m.name))}");
+
+            // Two hardened tiles of one def share one crisp material, so the
+            // section still draws them in one call.
+            IntVec3 other = o + IntVec3.East * 2;
+            List<Material> first = Build(soft, () =>
+            {
+                Paint(map, CellRect.SingleCell(other), soft);
+                Place(map, o, Single, Rot4.West);
+                Place(map, other, Single, Rot4.West);
+            });
+            List<Material> second = CoverMaterials(map, other);
+            Clear();
+            Check(first.Count > 0 && second.Count > 0 && first.Concat(second).Distinct().Count() == 1,
+                "naname.crisp.sharedMaterial",
+                $"{first.Concat(second).Distinct().Count()} distinct materials for two tiles of one def");
+
+            // A painted diagonal floor keeps its colour and its texture when it
+            // turns crisp: the copy changes the mask and nothing else.
+            ColorDef paint = DefDatabase<ColorDef>.AllDefs.FirstOrDefault(c => c.colorType == ColorType.Structure);
+            if (paint == null)
+            {
+                Skip("naname.crisp.floorKeepsColour", "no structure paint colour loaded");
+            }
+            else
+            {
+                List<Material> before = Build(softFloor, () => map.terrainGrid.SetTerrainColor(o, paint));
+                List<Material> after = Build(softFloor, () =>
+                {
+                    map.terrainGrid.SetTerrainColor(o, paint);
+                    Place(map, o, Single, Rot4.West);
+                });
+                Clear();
+                bool kept = before.Count > 0 && after.Count > 0
+                    && MaskName(before[0]) == "HalfBlend" && MaskName(after[0]) == "HalfTriangle"
+                    && before[0].color == after[0].color && before[0].mainTexture == after[0].mainTexture;
+                Check(kept, "naname.crisp.floorKeepsColour",
+                    before.Count == 0 || after.Count == 0 ? "no second quad was drawn at the tile"
+                        : $"before: {MaskName(before[0])} in {before[0].color}; after: {MaskName(after[0])} in {after[0].color}");
+            }
+            Clear();
+        }
+
+        /// <summary>
+        /// NANAME's tile of <paramref name="cover"/> over <paramref name="ground"/>
+        /// through <paramref name="mask"/>, its cover in the corner
+        /// <paramref name="rot"/> names, made through NANAME's own maker if no
+        /// mod has made it yet. Null when NANAME or the mask is missing.
+        /// </summary>
+        internal static TerrainDef NanameBlend(string mask, TerrainDef ground, TerrainDef cover, Rot4 rot)
+        {
+            Type maskType = GenTypes.GetTypeInAnyAssembly("NanameFloors.TerrainMask");
+            Type blendedType = GenTypes.GetTypeInAnyAssembly("NanameFloors.BlendedTerrainDef");
+            Type utilType = GenTypes.GetTypeInAnyAssembly(NanameInterop.UtilClass);
+            if (maskType == null || blendedType == null || utilType == null) return null;
+
+            // NANAME's def reads its mask when it loads and throws on a missing one.
+            if (ContentFinder<Texture2D>.Get(NanameInterop.MaskFolder + mask, false) == null) return null;
+
+            string name = (string)HarmonyLib.AccessTools.Method(maskType, "GetDefName")
+                .Invoke(null, new object[] { mask, ground, cover, rot });
+            System.Reflection.MethodInfo find = typeof(DefDatabase<>).MakeGenericType(blendedType).GetMethod("GetNamedSilentFail");
+            TerrainDef def = (TerrainDef)find.Invoke(null, new object[] { name });
+            if (def == null)
+            {
+                HarmonyLib.AccessTools.Method(utilType, "MakeBlendedTerrain")
+                    .Invoke(null, new[] { Activator.CreateInstance(maskType, mask, ground, cover, rot) });
+                def = (TerrainDef)find.Invoke(null, new object[] { name });
+            }
+            return def;
+        }
+
+        /// <summary>
+        /// The materials a cell's second quad was drawn with, read after
+        /// regenerating its section's terrain layer: every submesh, under one
+        /// of NANAME's masks, that holds the four corners of the cell in the
+        /// order NANAME adds them.
+        /// </summary>
+        internal static List<Material> CoverMaterials(Map map, IntVec3 c)
+        {
+            Section section = map.mapDrawer.SectionAt(c);
+            SectionLayer layer = section.GetLayer(typeof(SectionLayer_Terrain));
+            section.RegenerateSingleLayer(layer);
+
+            bool At(Vector3 v, int x, int z) => Mathf.Approximately(v.x, x) && Mathf.Approximately(v.z, z);
+            List<Material> found = new List<Material>();
+            foreach (LayerSubMesh sub in layer.subMeshes)
+            {
+                if (!sub.finalized || sub.disabled || sub.material == null || MaskName(sub.material) == null) continue;
+                List<Vector3> v = sub.verts;
+                for (int i = 0; i + 3 < v.Count; i++)
+                {
+                    if (At(v[i], c.x, c.z) && At(v[i + 1], c.x, c.z + 1)
+                        && At(v[i + 2], c.x + 1, c.z + 1) && At(v[i + 3], c.x + 1, c.z))
+                    {
+                        found.Add(sub.material);
+                        break;
+                    }
+                }
+            }
+            return found;
+        }
+
+        /// <summary>The NANAME mask a material draws through, or null if it draws through none.</summary>
+        internal static string MaskName(Material material)
+        {
+            if (nanameMasks == null)
+            {
+                nanameMasks = new HashSet<string>(ContentFinder<Texture2D>
+                    .GetAllInFolder(NanameInterop.MaskFolder.TrimEnd('/')).Select(t => t.name));
+            }
+            int id = ShaderPropertyIDs.MaskTex;
+            string name = material.HasProperty(id) ? material.GetTexture(id)?.name : null;
+            return name != null && nanameMasks.Contains(name) ? name : null;
+        }
+
+        internal static HashSet<string> nanameMasks;
     }
 }
 #endif

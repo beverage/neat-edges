@@ -41,6 +41,8 @@ Other mods can make their own decorations harden edges through the extension the
 Recommended with:
 · Flooring Floors. Neat Edges provides borders, but no floors of its own, and this mod adds hundreds, in all materials, and expands on its limited set of border pieces.
 · Dub's Paint Shop. Neat Edges' border pieces are all paintable, so add some color to builds!
+· NANAME Floors. Lays floors on the diagonal, and the diagonal border pieces trim them along the same line.
+· Smooth Terrain. Smooths the blocky edges of natural terrain with NANAME Floors' diagonals. Where a hard edge or border runs along one of those diagonals, Neat Edges draws it as a hard line instead of a soft blend.
 
 The painted area follows Owlchemist's Perspective: Paths, which solved the whole-tile case first.
 
