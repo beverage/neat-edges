@@ -1,0 +1,5 @@
+v1.1.2 update:
+
+With Adaptive Storage - Global Settings, the floor borders no longer vanish from the Floors tab and from search after a storage building is moved to another tab.
+
+Borders you have already built load as they are and harden the same edges.

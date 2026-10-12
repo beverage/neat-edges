@@ -154,6 +154,7 @@ namespace NeatEdges
             Guard("trims.geometry", CaseStripGeometry);
             Guard("trims.strip", () => CaseStripTrim(map));
             Guard("trims.buttons", CaseTrimButtons);
+            Guard("trims.buttons.rebuild", CaseTrimButtonsSurviveRebuild);
             Guard("trims.joins", () => CaseTrimJoinsGiven(map));
             Guard("trims.diagonal.ends", () => CaseDiagonalEndsOnMap(map));
             Guard("trims.diagonal.refresh", () => CaseDiagonalRefresh(map));
@@ -1182,6 +1183,27 @@ namespace NeatEdges
             Check(drawn.SequenceEqual(FamilyShapes), "trims.buttons.order",
                 "the Floors tab's trim buttons, in the order it draws them: " + string.Join(", ", drawn));
 
+            // The tab keeps list order on a tie, and the buttons are listed
+            // ahead of every button made from defs, so each must sort after the
+            // buttons sharing its face style's order, as v1.1.1's did: vanilla's
+            // stone tiles share the floor border's 2060, and the floor border
+            // jumping ahead of them split the trims' row in two.
+            List<Designator> tab = buttons.ToList();
+            tab.SortStable((a, b) => a.Order.CompareTo(b.Order));
+            int ties = 0;
+            var ahead = new List<string>();
+            foreach (Designator_TrimShape button in shapeButtons)
+            {
+                float face = button.current?.Order ?? button.Order;
+                List<Designator> sharing = tab.Where(d => !(d is Designator_TrimShape) && d.Order == face).ToList();
+                ties += sharing.Count;
+                int at = tab.IndexOf(button);
+                ahead.AddRange(sharing.Where(d => tab.IndexOf(d) > at).Select(d => $"{button.shape} before {d.Label}"));
+            }
+            Note("trims.buttons.ties", $"{ties} other buttons share a trim button's face order");
+            Check(ahead.Count == 0, "trims.buttons.ties",
+                "trim buttons drawn ahead of a button with the same order: " + string.Join(", ", ahead));
+
             for (int s = 0; s < FamilyShapes.Length; s++)
             {
                 TrimPiece.Kind shape = FamilyShapes[s];
@@ -1214,6 +1236,57 @@ namespace NeatEdges
             }
             Check(Designator_TrimShape.ArchitectFilter() != null, "trims.buttons.searchReadable",
                 "the Architect tab's search filter could not be read, so search finds only the style on a button");
+        }
+
+        /// <summary>
+        /// The buttons survive the Floors tab being rebuilt in a game, which
+        /// another mod does by calling the category's ResolveReferences:
+        /// Adaptive Storage - Global Settings does it on every new game and load
+        /// once a player has moved a storage building to another tab. Vanilla
+        /// rebuilds the list from the defs and the special designator classes
+        /// alone, so in v1.1.0 and v1.1.1, when the buttons were added to the list
+        /// from code at startup, every trim left the tab and its search. With no long
+        /// event running the rebuild happens inside the call; the case checks
+        /// that it did (no instance from before is left) before it reads the
+        /// list, or a rebuild that never ran would pass.
+        ///
+        /// Runs after trims.buttons, and leaves the tab rebuilt.
+        /// </summary>
+        internal static void CaseTrimButtonsSurviveRebuild()
+        {
+            DesignationCategoryDef floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
+            if (floors == null)
+            {
+                Check(false, "trims.buttons.rebuild", "no Floors tab");
+                return;
+            }
+            List<Designator> before = floors.AllResolvedDesignators.ToList();
+            Dictionary<TrimPiece.Kind, List<string>> held = before.OfType<Designator_TrimShape>()
+                .ToDictionary(b => b.shape, b => b.Elements.OfType<Designator_Build>()
+                    .Select(e => e.PlacingDef.defName).ToList());
+
+            floors.ResolveReferences();
+
+            List<Designator> after = floors.AllResolvedDesignators;
+            int kept = after.Count(before.Contains);
+            if (after.Count == 0 || kept > 0)
+            {
+                Check(false, "trims.buttons.rebuild",
+                    $"the tab was not rebuilt ({after.Count} buttons, {kept} of them from before), so this proves nothing");
+                return;
+            }
+            List<Designator_TrimShape> shapeButtons = after.OfType<Designator_TrimShape>().ToList();
+            var problems = new List<string>();
+            List<TrimPiece.Kind> drawn = shapeButtons.OrderBy(b => b.Order).Select(b => b.shape).ToList();
+            if (!drawn.SequenceEqual(FamilyShapes))
+                problems.Add("buttons after the rebuild, in drawing order: " + string.Join(", ", drawn));
+            foreach (Designator_TrimShape button in shapeButtons)
+            {
+                List<string> got = button.Elements.OfType<Designator_Build>().Select(e => e.PlacingDef.defName).ToList();
+                if (!held.TryGetValue(button.shape, out List<string> was) || !got.SequenceEqual(was))
+                    problems.Add($"the {button.shape} button holds {string.Join(", ", got)}");
+            }
+            Check(problems.Count == 0, "trims.buttons.rebuild", string.Join("; ", problems));
         }
 
         // ---- the diagonal's joins on a real map -----------------------------

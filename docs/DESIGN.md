@@ -688,10 +688,17 @@ that one was never published.
   vine piece prints twice the vertices.
 - **Each shape is one button, its styles on right click** (`Designator_TrimShape`).
   Four styles of seven shapes would be 28 buttons on the Floors tab. The trims
-  carry `canGenerateDefaultDesignator false`, and at startup each shape in each
-  category becomes a dropdown subclass holding that shape in every style: a
-  left click goes to the style on the button, material menu and all, which
-  vanilla's dropdown never calls; a right click lists the styles. The first
+  carry `canGenerateDefaultDesignator false`, and each shape is a dropdown
+  subclass holding that shape in every style, whatever tab a style's def
+  names: a left click goes to the style on the button, material menu and all,
+  which vanilla's dropdown never calls; a right click lists the styles. The
+  seven are named in the Floors tab's `specialDesignatorClasses`, so vanilla
+  makes them each time it builds the tab's list. In v1.1.0 and v1.1.1 they were
+  added to the list from code at startup, and any mod that rebuilds the tabs threw
+  them away: Adaptive Storage - Global Settings rebuilds every tab on each new
+  game and load once a player has moved a storage building, and the trims left
+  the Floors tab and its search (found 2026-10-11 from a player's report,
+  reproduced in a lab with one crate moved to Furniture). The first
   build had one button per style with the shapes on right click, which made
   four buttons; on 2026-10-10 it turned round to seven, because a player
   looks for a shape in the menu and styles will outnumber shapes, so another
