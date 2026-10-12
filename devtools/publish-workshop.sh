@@ -49,8 +49,21 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$REPO/dist/NeatEdges"
-MODS="${RIMWORLD_APP:-$HOME/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app}/Mods"
+# RIMWORLD_APP overrides where the game is: the folder whose Mods/ it reads.
+# 1.6 keeps Mods/ inside RimWorldMac.app; 1.7 keeps it at the install root,
+# beside RimWorld.app.
+STEAM_RIMWORLD="$HOME/Library/Application Support/Steam/steamapps/common/RimWorld"
+if [ -n "${RIMWORLD_APP:-}" ]; then
+  MODS="$RIMWORLD_APP/Mods"
+elif [ -d "$STEAM_RIMWORLD/RimWorld.app" ]; then
+  MODS="$STEAM_RIMWORLD/Mods"
+else
+  MODS="$STEAM_RIMWORLD/RimWorldMac.app/Mods"
+fi
 LIVE="$MODS/NeatEdges"
+# Where install notes the link it removed, so restore puts that link back (a
+# play-test worktree, say) instead of always linking this checkout.
+LINK_RECORD="$REPO/dist/.dev-link"
 
 # The release allowlist: what the game loads, plus the human-readable
 # documents. Never media/, Source/, devtools/ or dist/.
@@ -60,9 +73,10 @@ die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 
 # install and restore both replace the path a running game loaded the mod
 # from, and the game rewrites ModsConfig.xml on exit over whatever the swap
-# did. Same refusal as run-harness.sh: quit first.
+# did. Same refusal as run-harness.sh: quit first. 1.6 runs as "RimWorld by
+# Ludeon Studios" and 1.7 as "RimWorld", so check for both.
 ensure_game_closed() {
-  if pgrep -x "RimWorld by Ludeon Studios" >/dev/null; then
+  if pgrep -x "RimWorld by Ludeon Studios" >/dev/null || pgrep -x RimWorld >/dev/null; then
     die "RimWorld is running; quit it before touching Mods/"
   fi
 }
@@ -130,11 +144,12 @@ cmd_install() {
   # the mod list, and ModLister's first-wins race would decide which one the
   # uploader publishes. A dot prefix does NOT hide a directory from the game
   # (ModLister enumerates GetDirectories() unfiltered), so the dev symlink
-  # cannot be parked anywhere inside Mods/. Delete it instead; restore
-  # recreates it with one ln -s.
+  # cannot be parked anywhere inside Mods/. Delete it instead, noting where it
+  # pointed; restore recreates it with one ln -s.
   if [ -L "$LIVE" ]; then
+    readlink "$LIVE" > "$LINK_RECORD"
     rm "$LIVE"
-    printf 'removed the dev symlink (restore recreates it)\n'
+    printf 'removed the dev symlink to %s (restore puts it back)\n' "$(cat "$LINK_RECORD")"
   elif [ -d "$LIVE" ]; then
     die "$LIVE is a real directory, not the dev symlink; resolve by hand"
   fi
@@ -256,11 +271,23 @@ cmd_restore() {
     printf 'no PublishedFileId.txt in the uploaded copy (upload not run, or it failed)\n'
   fi
 
-  if [ -d "$LIVE" ] && [ ! -L "$LIVE" ]; then
+  # A link already in place is left alone: re-pointing it here would move a
+  # play-test link to this checkout on a repeat run.
+  if [ -L "$LIVE" ]; then
+    rm -f "$LINK_RECORD"
+    printf 'dev symlink already in place: %s -> %s\n' "$LIVE" "$(readlink "$LIVE")"
+    return
+  fi
+  if [ -d "$LIVE" ]; then
     rm -rf "$LIVE"
   fi
-  ln -sfn "$REPO" "$LIVE"
-  printf 'dev symlink in place\n'
+  local target="$REPO"
+  if [ -f "$LINK_RECORD" ]; then
+    target="$(cat "$LINK_RECORD")"
+  fi
+  ln -sfn "$target" "$LIVE"
+  rm -f "$LINK_RECORD"
+  printf 'dev symlink back in place: %s -> %s\n' "$LIVE" "$target"
 }
 
 case "${1:-publish}" in
