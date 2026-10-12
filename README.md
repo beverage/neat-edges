@@ -194,7 +194,10 @@ it only touches.
 
 A trim that sets `canGenerateDefaultDesignator` to false joins the button for
 its shape on the Floors tab, as one more style on that button's right-click
-menu, so a mod adding a style adds no buttons. It still needs a
+menu, so a mod adding a style adds no buttons. Ideology treats a def with that
+flag as a building only some ideoligions may build, and so does the hidden
+ideoligion every colonist carries in a game without the DLC. Neat Edges lets
+every ideoligion build any def carrying a `NeatEdges.TrimPiece`, yours included. It still needs a
 `designationCategory`, since the game counts a def without one as not
 buildable, but which tab it names makes no difference: each shape has one
 button, and it is on Floors. Give it a `designatorDropdown`

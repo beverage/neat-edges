@@ -155,6 +155,7 @@ namespace NeatEdges
             Guard("trims.strip", () => CaseStripTrim(map));
             Guard("trims.buttons", CaseTrimButtons);
             Guard("trims.buttons.rebuild", CaseTrimButtonsSurviveRebuild);
+            Guard("trims.buildable", () => CaseTrimsBuildable(map));
             Guard("trims.joins", () => CaseTrimJoinsGiven(map));
             Guard("trims.diagonal.ends", () => CaseDiagonalEndsOnMap(map));
             Guard("trims.diagonal.refresh", () => CaseDiagonalRefresh(map));
@@ -1607,6 +1608,112 @@ namespace NeatEdges
             Clear();
             Check(measured, "trims.cost.measured",
                 "a layout printed no trim submeshes at all, so its numbers above measure nothing");
+        }
+
+        // ---- who may build them -------------------------------------------
+
+        /// <summary>
+        /// Every ideoligion's members may build every trim. The trims set
+        /// canGenerateDefaultDesignator false so the Floors tab shows a button
+        /// per shape rather than one per trim, and Ideo.MembersCanBuild reads
+        /// that flag as the mark of a building only some ideoligions may raise.
+        /// Every pawn carries an ideoligion, Ideology or not, and the one a game
+        /// without the DLC makes is not in classic mode, so from v1.1.0 to
+        /// v1.1.2 no colonist would build a trim in any game without Ideology,
+        /// nor in most games with it. The blueprint placed; the work was refused.
+        ///
+        /// Asked of every ideoligion in the game that refuses others' buildings:
+        /// one outside classic mode with no precept letting its members build
+        /// them. A turret's gun, which vanilla marks the same way, is the
+        /// control: each such ideoligion must still refuse it, or the case is
+        /// reading an ideoligion that refuses nothing. Then a colonist is asked
+        /// through GenConstruct.CanConstruct, the call the construction work
+        /// givers make, about a floor border blueprint beside them.
+        /// </summary>
+        internal static void CaseTrimsBuildable(Map map)
+        {
+            List<ThingDef> trims = AllTrims().Select(t => DefDatabase<ThingDef>.GetNamedSilentFail(t.name))
+                .Where(d => d != null).ToList();
+            ThingDef control = DefDatabase<ThingDef>.GetNamedSilentFail("Gun_MiniTurret");
+            if (trims.Count == 0 || control == null)
+            {
+                Skip("trims.buildable", trims.Count == 0 ? "no trims loaded" : "Gun_MiniTurret missing, so no control");
+                return;
+            }
+
+            List<Ideo> all = Find.IdeoManager.IdeosListForReading;
+            List<Ideo> strict = all.Where(i => !i.classicMode
+                && !i.PreceptsListForReading.Any(p => p.def.willingToConstructOtherIdeoBuildables)).ToList();
+            Note("trims.buildable.ideos", $"{all.Count} in the game, {strict.Count} refusing others' buildings: "
+                + string.Join(", ", all.Select(i => $"[{all.IndexOf(i)}] {i.name} (classic {i.classicMode}, "
+                    + $"made without the DLC {i.createdFromNoExpansionGame}, refuses {strict.Contains(i)})")));
+            if (strict.Count == 0)
+            {
+                Skip("trims.buildable", "no ideoligion here refuses another's building, so nothing would be tested");
+                return;
+            }
+
+            // Unspawned: MembersCanBuild reads only the def being built and the
+            // thing's style precept, and a blueprint and a frame both name their
+            // trim through entityDefToBuild.
+            var things = new List<Thing>();
+            foreach (ThingDef def in trims)
+            {
+                foreach (ThingDef made in new[] { def.blueprintDef, def.frameDef })
+                {
+                    if (made != null) things.Add(ThingMaker.MakeThing(made, GenStuff.DefaultStuffFor(made)));
+                }
+            }
+            Thing gun = ThingMaker.MakeThing(control, GenStuff.DefaultStuffFor(control));
+
+            foreach (Ideo ideo in strict)
+            {
+                int index = all.IndexOf(ideo);
+                Check(!ideo.MembersCanBuild(gun), $"trims.buildable.control.ideo{index}",
+                    $"{ideo.name} would build {control.defName}, so it refuses nothing and the check below proves nothing");
+                List<string> refused = things.Where(t => !ideo.MembersCanBuild(t)).Select(t => t.def.defName).ToList();
+                Check(refused.Count == 0, $"trims.buildable.ideo{index}",
+                    $"{ideo.name} refuses {refused.Count} of {things.Count}: {string.Join(", ", refused.Take(6))}"
+                    + (refused.Count > 6 ? ", ..." : ""));
+            }
+
+            Pawn colonist = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.Ideo != null && strict.Contains(p.Ideo));
+            if (colonist == null)
+            {
+                Skip("trims.buildable.colonist", "no colonist holds an ideoligion that refuses others' buildings");
+                return;
+            }
+
+            Clear();
+            ThingDef border = trims[0];
+            ThingDef stuff = GenStuff.DefaultStuffFor(border);
+            IntVec3 cell = IntVec3.Invalid;
+            foreach (IntVec3 c in GenRadial.RadialCellsAround(colonist.Position, 8f, false))
+            {
+                if (c.InBounds(map) && c.GetThingList(map).Count == 0
+                    && GenConstruct.CanPlaceBlueprintAt(border, c, Rot4.South, map, stuffDef: stuff).Accepted
+                    && colonist.CanReach(c, Verse.AI.PathEndMode.Touch, Danger.Deadly))
+                {
+                    cell = c;
+                    break;
+                }
+            }
+            if (!cell.IsValid)
+            {
+                Skip("trims.buildable.colonist", "no buildable cell the colonist can reach");
+                return;
+            }
+
+            map.fogGrid.Unfog(cell);
+            Thing blueprint = GenConstruct.PlaceBlueprintForBuild(border, cell, map, Rot4.South, Faction.OfPlayer, stuff);
+            Spawned.Add(blueprint);
+            Verse.AI.JobFailReason.Clear();
+            bool can = GenConstruct.CanConstruct(blueprint, colonist, checkSkills: false, forced: true);
+            Check(can, "trims.buildable.colonist",
+                $"{colonist.LabelShort} of {colonist.Ideo.name} refused a {border.defName} blueprint: "
+                + (Verse.AI.JobFailReason.Reason ?? "no reason given"));
+            Verse.AI.JobFailReason.Clear();
+            Clear();
         }
 
         // ---- the strip renderer ------------------------------------------

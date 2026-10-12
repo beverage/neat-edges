@@ -710,6 +710,15 @@ that one was never published.
   terrain, so each shape's abstract def names a group with it set. Search
   matches a button's label only, so while a search runs the button shows the
   first style it matches, read from the Architect tab by reflection.
+  The flag has a second reader: Ideology's `Ideo.MembersCanBuild` treats a def
+  that sets it false as an ideoligion building, which only some ideoligions'
+  members may build. Every pawn carries an ideoligion, and the one a game
+  without the DLC makes is not in classic mode, so from v1.1.0 to v1.1.2 no
+  colonist would build a trim in any game without Ideology, nor in most with
+  it (found 2026-10-12 from two players' reports). `Patch_TrimsBuildableByAll`
+  postfixes the check to pass any def carrying a `TrimPiece`. Putting the flag
+  back would bring back the 28 buttons, and listing the trims on every
+  structure meme would give each a second, ideoligion-made button on the tab.
 - **New defNames are checked against hash slots.** Saves store rock, ore and
   deep resources by a def's slot, and every buildable def adds itself and its
   generated Blueprint and Frame, which sort ahead of every resource, so a new

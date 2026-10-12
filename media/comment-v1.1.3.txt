@@ -1,0 +1,5 @@
+v1.1.3 update:
+
+Colonists build floor borders again. Since v1.1.0 some colonists refused to build them, with or without Ideology.
+
+Borders you have already built load as they are and harden the same edges.

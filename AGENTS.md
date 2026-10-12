@@ -38,7 +38,12 @@ MineableGold's. The comments above each family say so; never rename them back.
 python3 devtools/check-invariants.py
 python3 devtools/check-shipped-dll.py
 devtools/run-harness.sh
+devtools/run-harness.sh --no-dlc
 ```
+
+The plain run loads every DLC installed (the game switches on any it has not
+been told about), so `--no-dlc` is the only run that is a game without them.
+A release runs both.
 
 **The harness and `-neatedges-harness` ship in no configuration.** They sit
 behind `#if HARNESS`, which every configuration except a plain `-c Release`
@@ -449,6 +454,20 @@ its shape's dropdown group, set on the shape's abstract def, with
 unrolling a dropdown on its Floors tab; vanilla reads it for terrain only. The
 Architect's search filter is read by reflection and fails soft to the style on
 the button (`trims.buttons.searchReadable` reports which).
+
+**`canGenerateDefaultDesignator false` makes a def an ideoligion building, and
+`Patch_TrimsBuildableByAll` undoes that for the trims.** Ideology's
+`Ideo.MembersCanBuild` passes such a def only for an ideoligion in classic mode,
+one that lists it through a meme or style, holds a precept for it, or holds a
+diversity precept; `GenConstruct.CanConstruct` asks it of every blueprint and
+frame. Every pawn carries an ideoligion, and the one a game without Ideology
+makes is not in classic mode, so v1.1.0 to v1.1.2 shipped trims no colonist
+would build in any game without the DLC, nor in most with it: the blueprint
+placed and the work was refused. The postfix keys on `TrimPiece`, so other
+mods' trims are covered, and it only turns a refusal into a yes. The harness
+pins it with a turret's gun as the control (`trims.buildable.*`), and only
+`--no-dlc` runs the case on a game without Ideology. Any new def that sets the
+flag for a menu reason needs the same answer.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this
