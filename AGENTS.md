@@ -420,13 +420,26 @@ it. Keep it even though a diagonal looks right inside one section:
 `trims.diagonal.refresh` builds across a section edge on purpose. The placing
 ghost has no thing, so it reads the map at its own cell.
 
-**Each shape is one button, built at startup.** `TrimShapeButtons` groups the
-defs that carry a `TrimPiece`, a designation category and
-`canGenerateDefaultDesignator false` by category and shape, and adds a
-`Designator_TrimShape` holding that shape in every style, lowest `uiOrder`
-first, to the category. Buttons go by shape rather than by style (changed
-2026-10-10) because shapes are what a player looks for in the menu and styles
-will outnumber them; another mod's style then adds no buttons. It is a
+**Each shape is one button, always on Floors, made by vanilla.** Each shape
+has a `Designator_TrimShape` subclass (`Designator_TrimStraight` and so on),
+named in the Floors tab's `specialDesignatorClasses` by
+`Patches/NeatEdges_Designators.xml`, and each holds every def that carries a
+`TrimPiece` of its shape, a designation category (any: vanilla counts a def
+without one as not buildable) and `canGenerateDefaultDesignator false`, lowest
+`uiOrder` first. **Never add a button to a tab's list from code.** Vanilla
+rebuilds a tab's list from its defs and its special designator classes alone,
+whenever anything calls the category's `ResolveReferences`, and Adaptive
+Storage - Global Settings does on every new game and load once a player has
+moved a storage building to another tab; in v1.1.0 and v1.1.1 the buttons were
+added at startup, and that rebuild took every trim off the tab and out of search
+(`trims.buttons.rebuild` rebuilds the tab and checks). A button's `Order` is
+its face style's `uiOrder` plus `TieBreak`: the tab keeps list order on a tie,
+special designators are listed first, and vanilla's stone tiles share the
+floor border's 2060, so without it the floor border jumps ahead of the tiles
+and splits the trims' row (`trims.buttons.ties`). Buttons go by shape
+rather than by style (changed 2026-10-10) because shapes are what a player
+looks for in the menu and styles will outnumber them; another mod's style then
+adds no buttons, whatever tab its def names. It is a
 `Designator_Dropdown`, so a placed trim's Copy still finds that trim's own
 `Designator_Build`, but a left click goes to the current style's
 `ProcessInput`, where the material menu lives; vanilla's dropdown never calls

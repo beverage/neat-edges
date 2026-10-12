@@ -17,4 +17,25 @@
     </value>
   </Operation>
 
+  <!-- One button per trim shape, each holding that shape in every style, on
+       the Floors tab. Named here rather than added to the tab's list from
+       code, so vanilla makes them whenever it builds the list: once at
+       startup, and again whenever another mod rebuilds the tab (Adaptive
+       Storage - Global Settings does on every new game and load). A button
+       added from code is lost to that rebuild. Each sets its Order from its
+       first style's uiOrder, so the tab sorts them among the floors as
+       before; their place in this list changes nothing. -->
+  <Operation Class="PatchOperationAdd">
+    <xpath>Defs/DesignationCategoryDef[defName="Floors"]/specialDesignatorClasses</xpath>
+    <value>
+      <li>NeatEdges.Designator_TrimStraight</li>
+      <li>NeatEdges.Designator_TrimCorner</li>
+      <li>NeatEdges.Designator_TrimInsideCorner</li>
+      <li>NeatEdges.Designator_TrimRunner</li>
+      <li>NeatEdges.Designator_TrimEndCap</li>
+      <li>NeatEdges.Designator_TrimFrame</li>
+      <li>NeatEdges.Designator_TrimDiagonal</li>
+    </value>
+  </Operation>
+
 </Patch>

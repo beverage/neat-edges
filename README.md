@@ -193,8 +193,11 @@ beside it already seal that corner, so an empty list there would harden a tile
 it only touches.
 
 A trim that sets `canGenerateDefaultDesignator` to false joins the button for
-its shape in its build category, as one more style on that button's right-click
-menu, so a mod adding a style adds no buttons. Give it a `designatorDropdown`
+its shape on the Floors tab, as one more style on that button's right-click
+menu, so a mod adding a style adds no buttons. It still needs a
+`designationCategory`, since the game counts a def without one as not
+buildable, but which tab it names makes no difference: each shape has one
+button, and it is on Floors. Give it a `designatorDropdown`
 group with `includeEyeDropperTool` set as well: on its Floors tab, Better
 Architect Menu lists a button's trims one by one when none of them has such a
 group. A def gated on Neat Edges can name Neat Edges' own, `NE_TrimStraights`

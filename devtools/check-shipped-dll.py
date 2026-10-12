@@ -138,10 +138,21 @@ REQUIRED_TYPES = [
     # the other, which matters: this counts substrings.
     "Graphic_StripTrim",
     "TrimPiece",
-    # Given to every trim at startup and building every shape's button; no
-    # XML names them, so nothing else would miss them.
+    # Given to every trim at startup; no XML names it, so nothing else would
+    # miss it.
     "CompTrimJoins",
+    # Every shape's build button, named in the Floors tab's
+    # specialDesignatorClasses by Patches/ (a missing one is a config error
+    # and a shape gone from the tab), and the base they share. No name here
+    # contains another.
     "Designator_TrimShape",
+    "Designator_TrimStraight",
+    "Designator_TrimCorner",
+    "Designator_TrimInsideCorner",
+    "Designator_TrimRunner",
+    "Designator_TrimEndCap",
+    "Designator_TrimFrame",
+    "Designator_TrimDiagonal",
 ]
 
 failures = []

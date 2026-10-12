@@ -36,17 +36,54 @@ namespace NeatEdges
     /// a click places that style. The filter is read from the Architect tab by
     /// reflection; if that field ever moves, search simply finds the style on
     /// the button, as it does for vanilla's dropdowns.
+    ///
+    /// Each shape's button is a subclass below, named in the Floors tab's
+    /// specialDesignatorClasses (Patches/NeatEdges_Designators.xml), so
+    /// vanilla makes the buttons itself whenever it builds that tab's list.
+    /// It builds it once at startup, and again whenever anything calls the
+    /// category's ResolveReferences: Adaptive Storage - Global Settings does,
+    /// on every new game and load, once a player has moved a storage building
+    /// to another tab. Buttons added to the list at startup, as these were in
+    /// v1.1.0 and v1.1.1, are thrown away by that rebuild and never come back.
+    ///
+    /// A button holds every trim of its shape, whatever tab the trim's def
+    /// names: one button per shape, always on Floors. The def still needs a
+    /// designationCategory, because vanilla counts a def without one as not
+    /// buildable by the player; Copy finds the trim's designator on any tab.
     /// </summary>
-    public class Designator_TrimShape : Designator_Dropdown
+    public abstract class Designator_TrimShape : Designator_Dropdown
     {
         /// <summary>The shape every style on the button has.</summary>
         internal readonly TrimPiece.Kind shape;
 
         internal Designator current;
 
-        public Designator_TrimShape(TrimPiece.Kind shape, IEnumerable<ThingDef> styles)
+        /// <summary>
+        /// Added to the face style's uiOrder to make the button's Order. The
+        /// tab sorts its buttons by Order and keeps list order on a tie, and a
+        /// special designator is listed before every button the tab makes from
+        /// defs, so on a tie the shape would jump ahead: the floor border's 2060
+        /// is the stone tiles' too, and it would split the row of trims from
+        /// the tiles. Just past the face's own order, a button sorts after
+        /// everything that shares it, where v1.1.0 and v1.1.1 put it by adding
+        /// the buttons last, and before anything ordered higher.
+        /// </summary>
+        internal const float TieBreak = 0.01f;
+
+        /// <summary>
+        /// Every def drawn as this shape that leaves its button to Neat Edges
+        /// (canGenerateDefaultDesignator false), Neat Edges' and other mods',
+        /// lowest uiOrder first, so another mod's style is one more line on
+        /// the shape's menu and adds no button.
+        /// </summary>
+        protected Designator_TrimShape(TrimPiece.Kind shape)
         {
             this.shape = shape;
+            IEnumerable<ThingDef> styles = DefDatabase<ThingDef>.AllDefsListForReading
+                .Where(d => d.GetModExtension<TrimPiece>()?.shape == shape && d.designationCategory != null
+                    && !d.canGenerateDefaultDesignator)
+                .OrderBy(d => d.uiOrder)
+                .ThenBy(d => d.defName);
             foreach (ThingDef def in styles)
             {
                 Add(new Designator_Build(def));
@@ -54,7 +91,7 @@ namespace NeatEdges
             current = Elements.FirstOrDefault();
             if (current != null)
             {
-                Order = current.Order;
+                Order = current.Order + TieBreak;
             }
         }
 
@@ -144,38 +181,43 @@ namespace NeatEdges
         }
     }
 
-    /// <summary>
-    /// Builds a button for every shape of trim with no buttons of its own
-    /// (canGenerateDefaultDesignator false), holding that shape in every style
-    /// in the category, lowest uiOrder first, and adds it to the category.
-    /// Neat Edges' seven come this way, and another mod's trims that opt in the
-    /// same way join them: its straight is one more line on the straight's
-    /// menu.
-    ///
-    /// Runs as a static constructor, after the categories resolved their own
-    /// designators (that is queued while defs resolve, and static constructors
-    /// are queued after) and before any map.
-    /// </summary>
-    [StaticConstructorOnStartup]
-    internal static class TrimShapeButtons
-    {
-        internal static readonly List<Designator_TrimShape> All = new List<Designator_TrimShape>();
+    // One per shape, because vanilla makes a special designator from its type
+    // alone. Patches/NeatEdges_Designators.xml names each of them, and
+    // check-shipped-dll.py requires each by name. No save stores them, so a
+    // rename costs only those two files.
 
-        static TrimShapeButtons()
-        {
-            var shapes = DefDatabase<ThingDef>.AllDefsListForReading
-                .Where(d => d.GetModExtension<TrimPiece>() != null && d.designationCategory != null
-                    && !d.canGenerateDefaultDesignator)
-                .GroupBy(d => (d.designationCategory, d.GetModExtension<TrimPiece>().shape))
-                .OrderBy(g => g.Key.shape)
-                .ThenBy(g => g.Key.designationCategory.defName);
-            foreach (var shape in shapes)
-            {
-                var button = new Designator_TrimShape(shape.Key.shape,
-                    shape.OrderBy(d => d.uiOrder).ThenBy(d => d.defName));
-                shape.Key.designationCategory.AllResolvedDesignators.Add(button);
-                All.Add(button);
-            }
-        }
+    public class Designator_TrimStraight : Designator_TrimShape
+    {
+        public Designator_TrimStraight() : base(TrimPiece.Kind.Straight) { }
+    }
+
+    public class Designator_TrimCorner : Designator_TrimShape
+    {
+        public Designator_TrimCorner() : base(TrimPiece.Kind.Corner) { }
+    }
+
+    public class Designator_TrimInsideCorner : Designator_TrimShape
+    {
+        public Designator_TrimInsideCorner() : base(TrimPiece.Kind.InsideCorner) { }
+    }
+
+    public class Designator_TrimRunner : Designator_TrimShape
+    {
+        public Designator_TrimRunner() : base(TrimPiece.Kind.Runner) { }
+    }
+
+    public class Designator_TrimEndCap : Designator_TrimShape
+    {
+        public Designator_TrimEndCap() : base(TrimPiece.Kind.EndCap) { }
+    }
+
+    public class Designator_TrimFrame : Designator_TrimShape
+    {
+        public Designator_TrimFrame() : base(TrimPiece.Kind.Frame) { }
+    }
+
+    public class Designator_TrimDiagonal : Designator_TrimShape
+    {
+        public Designator_TrimDiagonal() : base(TrimPiece.Kind.Diagonal) { }
     }
 }

@@ -269,7 +269,7 @@ ground: granite pebbles on granite flagstone show nothing.
 | `StripTrimGeometry.cs` | the bands, mitres and UVs of each shape, the diagonal's four kinds of end, and the variant pick, mirrored by `devtools/strip_trim.py` |
 | `TrimPiece.cs` | the extension naming a trim's shape, its strip's band count, variants and paint overlay, read through a blueprint to the def it builds |
 | `CompTrimJoins.cs` | reprints the trims around one that is built or removed, so a diagonal across a section's edge takes its new end; given to every trim def at startup |
-| `Designator_TrimShape.cs` | one build button per shape: a left click places the style on it, a right click lists the rest; built at startup for every shape of trim in a category |
+| `Designator_TrimShape.cs` | one build button per shape, on the Floors tab: a left click places the style on it, a right click lists the rest; one subclass per shape, named in the tab's `specialDesignatorClasses` by `Patches/NeatEdges_Designators.xml` so vanilla remakes them whenever the tab is rebuilt |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
