@@ -10,6 +10,19 @@
 #   devtools/run-harness.sh --exclusive  # refuse if any RimWorld is up
 #   devtools/run-harness.sh --with owlchemist.perspectivepaths
 #                                        # the minimal list plus that mod
+#   devtools/run-harness.sh --no-dlc     # the minimal list with no DLC at all
+#
+# THE MINIMAL LIST CARRIES EVERY DLC YOU OWN, UNLESS --no-dlc
+#
+# The generated ModsConfig.xml names no knownExpansions, and RimWorld switches
+# on any installed expansion it has not been told about, so the default run is
+# Core plus all five DLCs plus the mods below (measured 2026-10-12: the config
+# the game wrote back listed all eight). That is a fair default, since most
+# players own them, but it is not a game without the DLCs. --no-dlc lists all
+# five as known and none as active, which is. It found its first bug at once:
+# from v1.1.0 no colonist in a game without Ideology would build a trim, and
+# the default run could not see it. --with still adds to it, so
+# `--no-dlc --with ludeon.rimworld.ideology` is Ideology alone.
 #
 # WHY --with EXISTS
 #
@@ -113,21 +126,33 @@ MINIMAL_MODS=(
   mrbeverage.neatedges
 )
 
+# Listed as known by --no-dlc, so the game leaves them off. Naming one a player
+# does not own does nothing.
+EXPANSIONS=(
+  ludeon.rimworld.royalty
+  ludeon.rimworld.ideology
+  ludeon.rimworld.biotech
+  ludeon.rimworld.anomaly
+  ludeon.rimworld.odyssey
+)
+
 FULL=0
 EXCLUSIVE=0
+NO_DLC=0
 WITH=""
 while [ $# -gt 0 ]
 do
   case "$1" in
     --full) FULL=1 ;;
     --exclusive) EXCLUSIVE=1 ;;
+    --no-dlc) NO_DLC=1 ;;
     --with)
       [ $# -ge 2 ] || { printf 'error: --with needs a packageId\n' >&2; exit 2; }
       MINIMAL_MODS+=("$2")
       WITH="$WITH $2"
       shift
       ;;
-    *) printf 'unknown option: %s (--full | --exclusive | --with <packageId>)\n' "$1" >&2; exit 2 ;;
+    *) printf 'unknown option: %s (--full | --exclusive | --no-dlc | --with <packageId>)\n' "$1" >&2; exit 2 ;;
   esac
   shift
 done
@@ -136,6 +161,8 @@ die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 
 [ "$FULL" = "1" ] && [ -n "$WITH" ] \
   && die "--with adds to the minimal list, and --full uses yours instead; pick one"
+[ "$FULL" = "1" ] && [ "$NO_DLC" = "1" ] \
+  && die "--no-dlc shapes the minimal list, and --full uses yours instead; pick one"
 
 # WHAT THE STALL LOOKED LIKE, PRINTED RATHER THAN ASSERTED.
 #
@@ -299,10 +326,21 @@ else
     do
       printf '    <li>%s</li>\n' "$mod"
     done
-    printf '  </activeMods>\n</ModsConfigData>\n'
+    printf '  </activeMods>\n'
+    if [ "$NO_DLC" = "1" ]
+    then
+      printf '  <knownExpansions>\n'
+      for dlc in "${EXPANSIONS[@]}"
+      do
+        printf '    <li>%s</li>\n' "$dlc"
+      done
+      printf '  </knownExpansions>\n'
+    fi
+    printf '</ModsConfigData>\n'
   } > "$TESTDATA/Config/ModsConfig.xml"
   xmllint --noout "$TESTDATA/Config/ModsConfig.xml" || die "generated mod list is not well-formed"
-  printf 'mod list: minimal (%s mods, isolated)%s\n' "${#MINIMAL_MODS[@]}" \
+  printf 'mod list: minimal (%s mods, isolated, %s)%s\n' "${#MINIMAL_MODS[@]}" \
+    "$([ "$NO_DLC" = "1" ] && printf 'no DLC unless named' || printf 'plus every DLC installed')" \
     "${WITH:+, with$WITH}"
 fi
 
