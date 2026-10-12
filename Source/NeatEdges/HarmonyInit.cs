@@ -17,10 +17,13 @@ namespace NeatEdges
     ///                                            applied by hand and only while it is
     ///                                            installed; passes the method through
     ///                                            untouched if its anchor is missing
+    ///   <see cref="Patch_TrimsBuildableByAll"/>  lets every ideoligion build the trims,
+    ///                                            which Ideology otherwise reads as
+    ///                                            ideoligion buildings
     ///
-    /// The trims need no patch: <see cref="Graphic_StripTrim"/> never offers its
-    /// strip to the static atlas. (Until 2026-10 a fifth patch, applied from a
-    /// Mod constructor before any def loaded, kept the per-facing trim textures
+    /// The trims need no patch to draw: <see cref="Graphic_StripTrim"/> never
+    /// offers its strip to the static atlas. (Until 2026-10 a patch applied from
+    /// a Mod constructor before any def loaded kept the per-facing trim textures
     /// out of it.)
     /// </summary>
     [StaticConstructorOnStartup]
