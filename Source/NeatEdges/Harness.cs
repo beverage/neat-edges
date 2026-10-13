@@ -984,6 +984,18 @@ namespace NeatEdges
         ///     half's;
         ///   - drawn larger than its tile, a piece would overlap its neighbour.
         ///
+        /// An engine that keeps one wrap mode for every axis cannot repeat a
+        /// texture one way and clamp it the other. RimWorld 1.7's UnityStubs is
+        /// one: it keeps the axis set last, so the strip is clamped both ways
+        /// there. A texture of the case's own, set the way the strip is, finds
+        /// out; on such an engine each trim is checked for the clamp across
+        /// alone, and trims.render.wrapAlong reports the repeat along as
+        /// skipped. The shipped strips draw the same clamped, because the floor
+        /// border's and the inlay's are uniform along the band and the vine's
+        /// and the pebbles' variants keep their coordinates inside the strip. A
+        /// strip that needed the repeat would draw wrong there, and nothing here
+        /// would say so.
+        ///
         /// Nothing of ours may patch the atlas door any more: the strip never
         /// knocks, and a patch there would run for every texture at startup.
         /// </summary>
@@ -995,6 +1007,20 @@ namespace NeatEdges
                 .Any(m => HarmonyLib.Harmony.GetPatchInfo(m)?.Owners.Contains(HarmonyInit.Id) == true);
             Check(!atlasDoor, "trims.render.atlasUnpatched",
                 "a Neat Edges patch sits on GlobalTextureAtlasManager.TryInsertStatic again");
+
+            var probe = new Texture2D(1, 1);
+            probe.wrapModeU = TextureWrapMode.Repeat;
+            probe.wrapModeV = TextureWrapMode.Clamp;
+            TextureWrapMode probeU = probe.wrapModeU, probeV = probe.wrapModeV;
+            UnityEngine.Object.Destroy(probe);
+            bool perAxis = probeU == TextureWrapMode.Repeat && probeV == TextureWrapMode.Clamp;
+            if (!perAxis)
+            {
+                Skip("trims.render.wrapAlong", "this engine keeps one wrap mode for every axis, as RimWorld 1.7's "
+                    + "UnityStubs does: a texture set to Repeat along and then Clamp across reads back " + probeU
+                    + " and " + probeV + ", so no strip can repeat along its band, and each trim below is checked "
+                    + "for the clamp across alone");
+            }
 
             foreach ((string name, _, _) in AllTrims())
             {
@@ -1016,7 +1042,10 @@ namespace NeatEdges
                 }
                 else
                 {
-                    if (texture.wrapModeU != TextureWrapMode.Repeat || texture.wrapModeV != TextureWrapMode.Clamp)
+                    bool wrapsWrong = perAxis
+                        ? texture.wrapModeU != TextureWrapMode.Repeat || texture.wrapModeV != TextureWrapMode.Clamp
+                        : texture.wrapModeV != TextureWrapMode.Clamp;
+                    if (wrapsWrong)
                     {
                         problems.Add("wraps " + texture.wrapModeU + " along and " + texture.wrapModeV + " across");
                     }
