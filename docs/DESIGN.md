@@ -687,8 +687,8 @@ that one was never published.
   1024 × 384, taking the trims' video memory from 1.27 MB to 1.53 MB, and a
   vine piece prints twice the vertices.
 - **Each shape is one button, its styles on right click** (`Designator_TrimShape`).
-  Four styles of seven shapes would be 28 buttons on the Floors tab. The trims
-  carry `canGenerateDefaultDesignator false`, and each shape is a dropdown
+  Four styles of seven shapes would be 28 buttons on the Floors tab. Each
+  shape is a dropdown
   subclass holding that shape in every style, whatever tab a style's def
   names: a left click goes to the style on the button, material menu and all,
   which vanilla's dropdown never calls; a right click lists the styles. The
@@ -710,15 +710,25 @@ that one was never published.
   terrain, so each shape's abstract def names a group with it set. Search
   matches a button's label only, so while a search runs the button shows the
   first style it matches, read from the Architect tab by reflection.
-  The flag has a second reader: Ideology's `Ideo.MembersCanBuild` treats a def
-  that sets it false as an ideoligion building, which only some ideoligions'
-  members may build. Every pawn carries an ideoligion, and the one a game
-  without the DLC makes is not in classic mode, so from v1.1.0 to v1.1.2 no
-  colonist would build a trim in any game without Ideology, nor in most with
-  it (found 2026-10-12 from two players' reports). `Patch_TrimsBuildableByAll`
-  postfixes the check to pass any def carrying a `TrimPiece`. Putting the flag
-  back would bring back the 28 buttons, and listing the trims on every
-  structure meme would give each a second, ideoligion-made button on the tab.
+  Vanilla's own button for each trim, which `ResolveDesignators` makes for
+  every def with a designation category, is taken off its tab by
+  `Patch_TrimDesignators`, a postfix on that method applied from
+  `NeatEdgesMod`'s constructor, because each tab's first build is queued ahead
+  of every static constructor. Through v1.1.3 the trims set
+  `canGenerateDefaultDesignator false` instead, the one def field that stops
+  vanilla making a button. The flag has a second reader: Ideology's
+  `Ideo.MembersCanBuild` treats a def that sets it false as an ideoligion
+  building, which only some ideoligions' members may build. Every pawn carries
+  an ideoligion, and the one a game without the DLC makes is not in classic
+  mode, so from v1.1.0 to v1.1.2 no colonist would build a trim in any game
+  without Ideology, nor in most with it (found 2026-10-12 from two players'
+  reports). v1.1.3 postfixed `MembersCanBuild` to pass any def carrying a
+  `TrimPiece`; then the flag went, so that no reader of it, Ideology's style
+  dominance and any other mod's included, takes the trims for ideoligion
+  buildings (a breaking change to the opt-in, accepted while no other mod is
+  known to use it). Listing the trims on every structure meme would have given each a
+  second, ideoligion-made button on the tab. If the postfix fails to apply,
+  every shape shows a second button; nothing becomes unbuildable.
 - **New defNames are checked against hash slots.** Saves store rock, ore and
   deep resources by a def's slot, and every buildable def adds itself and its
   generated Blueprint and Frame, which sort ahead of every resource, so a new
@@ -731,8 +741,11 @@ that one was never published.
   texture, and a `NeatEdges.TrimPiece` naming the shape. Those are a public
   contract from v1.1.0: the class name, the `shape` values, `Diagonal`
   included, the `bands`, `variants` and `paintOverlay` fields, the strip layout
-  with its mirrored overlay, and the shape
-  button for defs with `canGenerateDefaultDesignator false` stay as they are.
+  with its mirrored overlay, and the shape button for every buildable def
+  carrying a `TrimPiece` stay as they are. One part changed after v1.1.3: a
+  def no longer sets `canGenerateDefaultDesignator false` to join the button,
+  and one that still does is named in a startup warning, since Ideology reads
+  the flag as an ideoligion building.
   An older Neat Edges does not know a newer shape value, and an enum that fails
   to parse keeps its default, `Straight`, with an error, so a def using one
   should say which version it needs. The harness pins each part as the mod's

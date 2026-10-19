@@ -270,6 +270,8 @@ ground: granite pebbles on granite flagstone show nothing.
 | `TrimPiece.cs` | the extension naming a trim's shape, its strip's band count, variants and paint overlay, read through a blueprint to the def it builds |
 | `CompTrimJoins.cs` | reprints the trims around one that is built or removed, so a diagonal across a section's edge takes its new end; given to every trim def at startup |
 | `Designator_TrimShape.cs` | one build button per shape, on the Floors tab: a left click places the style on it, a right click lists the rest; one subclass per shape, named in the tab's `specialDesignatorClasses` by `Patches/NeatEdges_Designators.xml` so vanilla remakes them whenever the tab is rebuilt |
+| `Patch_TrimDesignators.cs` | the postfix on `DesignationCategoryDef.ResolveDesignators` that takes vanilla's own buttons for the trims off every tab, in every build of it |
+| `NeatEdgesMod.cs` | applies that one patch from a `Mod` constructor, before the game first builds the tabs; everything else is patched from `HarmonyInit` |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),

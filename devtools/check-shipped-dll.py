@@ -153,9 +153,12 @@ REQUIRED_TYPES = [
     "Designator_TrimEndCap",
     "Designator_TrimFrame",
     "Designator_TrimDiagonal",
-    # Without it no colonist builds a trim in a game without Ideology, nor in
-    # most games with it, and the blueprints still place, so nothing says why.
-    "Patch_TrimsBuildableByAll",
+    # Takes vanilla's own buttons for the trims off every tab, and the Mod
+    # class whose constructor applies it before the tabs are first built.
+    # Without either every shape shows twice. Neither name contains another
+    # here.
+    "Patch_TrimDesignators",
+    "NeatEdgesMod",
 ]
 
 failures = []

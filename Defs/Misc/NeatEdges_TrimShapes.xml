@@ -3,10 +3,10 @@
 
   <!-- One dropdown group per trim shape, named by each shape's abstract def in
        NeatEdges_Trims.xml. Neat Edges builds each shape's button itself
-       (NeatEdges.Designator_TrimShape, added to the Floors tab at startup)
-       because vanilla's dropdown locks a stuffable building to its default
-       material; the trims carry canGenerateDefaultDesignator false, so
-       vanilla makes no button of its own from these groups.
+       (NeatEdges.Designator_TrimShape, named in the Floors tab's special
+       designators) because vanilla's dropdown locks a stuffable building to
+       its default material. Vanilla also makes a dropdown from each of these
+       groups, and NeatEdges.Patch_TrimDesignators takes it off the tab.
 
        The groups exist for Better Architect Menu, which unrolls every dropdown
        on its Floors tab into its elements unless a member's group sets

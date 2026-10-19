@@ -1,0 +1,7 @@
+v1.1.5 update:
+
+Floor borders no longer carry the setting Ideology reads as an ideoligion building, so nothing treats them as one. Every colonist builds them, as since v1.1.3, and the build menu is unchanged.
+
+Mod authors: a border another mod adds no longer sets canGenerateDefaultDesignator to false. The README on GitHub has the details.
+
+Borders you have already built load as they are and harden the same edges.
