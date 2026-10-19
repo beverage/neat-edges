@@ -736,6 +736,20 @@ that one was never published.
   families' defNames say Pebbles and Vines because the singular names failed
   it: `Frame_NE_PebbleBorderEndCap` took Jade's slot on a 229-mod list, and
   `Blueprint_NE_VineBorderInsideCorner` hashed two below MineableGold.
+- **The trims are worthless where the floors are.** Floors Are (Absolutely)
+  Worthless (Workshop 2960126462, about 180,000 subscribers, 1.4 to 1.7) is one
+  XML patch setting every built floor's `MarketValue` to 0, so floors stop
+  feeding colony wealth, raid points and room wealth. A trim is part of the
+  floor to a player, so `NE_TrimBase` carries `<MarketValue
+  MayRequire="Hawkwood.FloorsAreAlmostWorthless">0</MarketValue>`: a `statBases`
+  entry naming a market value replaces the one worked out from material and
+  work, and the list loader skips an entry whose `MayRequire` mod is not active,
+  logging nothing. No C# and no new def. A census of the Workshop on 2026-10-19
+  found no other live mod that zeroes floors alone: WealthCorrector and Wealth
+  Tweaks scale buildings as a whole, which takes the trims with them already;
+  [AppV] Floor Wealth stopped at 1.4; Smoothed stone is worthless touches
+  smoothed stone only. Beauty is untouched either way. The hard edge marker,
+  worth 35 work and no material (0.13), is left as it is.
 - **Other mods can draw trims the same way.** A def opts in with the graphic
   class `NeatEdges.Graphic_StripTrim`, a strip of the same layout as its
   texture, and a `NeatEdges.TrimPiece` naming the shape. Those are a public
