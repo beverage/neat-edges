@@ -50,6 +50,9 @@ namespace NeatEdges
     /// names: one button per shape, always on Floors. The def still needs a
     /// designationCategory, because vanilla counts a def without one as not
     /// buildable by the player; Copy finds the trim's designator on any tab.
+    /// Vanilla makes a button of its own for every trim too, the trims being
+    /// ordinary buildables, and <see cref="Patch_TrimDesignators"/> takes those
+    /// off every tab as each is built.
     /// </summary>
     public abstract class Designator_TrimShape : Designator_Dropdown
     {
@@ -71,17 +74,16 @@ namespace NeatEdges
         internal const float TieBreak = 0.01f;
 
         /// <summary>
-        /// Every def drawn as this shape that leaves its button to Neat Edges
-        /// (canGenerateDefaultDesignator false), Neat Edges' and other mods',
-        /// lowest uiOrder first, so another mod's style is one more line on
-        /// the shape's menu and adds no button.
+        /// Every buildable def drawn as this shape, Neat Edges' and other
+        /// mods', lowest uiOrder first, so another mod's style is one more line
+        /// on the shape's menu and adds no button. Vanilla's own button for
+        /// each is taken off its tab by <see cref="Patch_TrimDesignators"/>.
         /// </summary>
         protected Designator_TrimShape(TrimPiece.Kind shape)
         {
             this.shape = shape;
             IEnumerable<ThingDef> styles = DefDatabase<ThingDef>.AllDefsListForReading
-                .Where(d => d.GetModExtension<TrimPiece>()?.shape == shape && d.designationCategory != null
-                    && !d.canGenerateDefaultDesignator)
+                .Where(d => d.GetModExtension<TrimPiece>()?.shape == shape && d.designationCategory != null)
                 .OrderBy(d => d.uiOrder)
                 .ThenBy(d => d.defName);
             foreach (ThingDef def in styles)

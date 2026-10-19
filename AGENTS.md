@@ -429,9 +429,10 @@ ghost has no thing, so it reads the map at its own cell.
 has a `Designator_TrimShape` subclass (`Designator_TrimStraight` and so on),
 named in the Floors tab's `specialDesignatorClasses` by
 `Patches/NeatEdges_Designators.xml`, and each holds every def that carries a
-`TrimPiece` of its shape, a designation category (any: vanilla counts a def
-without one as not buildable) and `canGenerateDefaultDesignator false`, lowest
-`uiOrder` first. **Never add a button to a tab's list from code.** Vanilla
+`TrimPiece` of its shape and a designation category (any: vanilla counts a def
+without one as not buildable), lowest `uiOrder` first. Vanilla makes a button
+of its own for every trim as well, and `Patch_TrimDesignators` takes those off
+every tab (below). **Never add a button to a tab's list from code.** Vanilla
 rebuilds a tab's list from its defs and its special designator classes alone,
 whenever anything calls the category's `ResolveReferences`, and Adaptive
 Storage - Global Settings does on every new game and load once a player has
@@ -455,19 +456,29 @@ unrolling a dropdown on its Floors tab; vanilla reads it for terrain only. The
 Architect's search filter is read by reflection and fails soft to the style on
 the button (`trims.buttons.searchReadable` reports which).
 
-**`canGenerateDefaultDesignator false` makes a def an ideoligion building, and
-`Patch_TrimsBuildableByAll` undoes that for the trims.** Ideology's
-`Ideo.MembersCanBuild` passes such a def only for an ideoligion in classic mode,
-one that lists it through a meme or style, holds a precept for it, or holds a
-diversity precept; `GenConstruct.CanConstruct` asks it of every blueprint and
-frame. Every pawn carries an ideoligion, and the one a game without Ideology
-makes is not in classic mode, so v1.1.0 to v1.1.2 shipped trims no colonist
-would build in any game without the DLC, nor in most with it: the blueprint
-placed and the work was refused. The postfix keys on `TrimPiece`, so other
-mods' trims are covered, and it only turns a refusal into a yes. The harness
-pins it with a turret's gun as the control (`trims.buildable.*`), and only
-`--no-dlc` runs the case on a game without Ideology. Any new def that sets the
-flag for a menu reason needs the same answer.
+**The trims leave `canGenerateDefaultDesignator` true; vanilla's buttons for
+them are taken off the tabs instead.** That flag is the only def field that
+stops `DesignationCategoryDef.ResolveDesignators` making a button, and Ideology
+reads it as the mark of an ideoligion building: `Ideo.MembersCanBuild` passes
+such a def only for an ideoligion in classic mode, one that lists it through a
+meme or style, holds a precept for it, or holds a diversity precept, and
+`GenConstruct.CanConstruct` asks it of every blueprint and frame. Every pawn
+carries an ideoligion, and the one a game without Ideology makes is not in
+classic mode, so v1.1.0 to v1.1.2 shipped trims no colonist would build in any
+game without the DLC, nor in most with it; v1.1.3 patched `MembersCanBuild`.
+Now the flag stays true, and `Patch_TrimDesignators` postfixes
+`ResolveDesignators` to remove what vanilla made for a trim: a lone
+`Designator_Build`, or a trim inside a plain `Designator_Dropdown`, exact types
+only so the shape buttons are never touched. It keys on `TrimPiece`, so other
+mods' trims are covered. **It is applied from `NeatEdgesMod`'s constructor, not
+`HarmonyInit`**: each tab's first build is queued during def resolution, ahead
+of every static constructor, so a patch from `HarmonyInit` would miss it.
+Failing to apply costs duplicate buttons and a startup warning, never a trim
+that cannot be built. A trim def that still sets the flag false is named in a
+startup warning. The harness asserts the delivery (`trims.buttons.suppressed`,
+`rebuild`, `everyTab`) and the gate (`trims.buildable.*`, with a turret's gun
+as the control; only `--no-dlc` runs it on a game without Ideology). Any new
+def that sets the flag for a menu reason brings the refusal back.
 
 **Other mods opt in by extension, never by name.** `BlocksTerrainFade` is
 extension-keyed so a third party's overlay can adopt the behaviour without this

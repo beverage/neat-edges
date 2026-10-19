@@ -192,15 +192,17 @@ The inside corner covers a corner of its tile, not an edge, and the strips
 beside it already seal that corner, so an empty list there would harden a tile
 it only touches.
 
-A trim that sets `canGenerateDefaultDesignator` to false joins the button for
-its shape on the Floors tab, as one more style on that button's right-click
-menu, so a mod adding a style adds no buttons. Ideology treats a def with that
-flag as a building only some ideoligions may build, and so does the hidden
-ideoligion every colonist carries in a game without the DLC. Neat Edges lets
-every ideoligion build any def carrying a `NeatEdges.TrimPiece`, yours included. It still needs a
-`designationCategory`, since the game counts a def without one as not
-buildable, but which tab it names makes no difference: each shape has one
-button, and it is on Floors. Give it a `designatorDropdown`
+Every buildable def carrying a `NeatEdges.TrimPiece` joins the button for its
+shape on the Floors tab, as one more style on that button's right-click menu,
+and Neat Edges takes the button the game would make for it off its tab, so a
+mod adding a style adds no buttons. It needs a `designationCategory`, since the
+game counts a def without one as not buildable, but which tab it names makes no
+difference: each shape has one button, and it is on Floors. Leave
+`canGenerateDefaultDesignator` alone. Through Neat Edges 1.1.3 this README
+asked for it to be false; Ideology reads false as a building only some ideoligions
+may build, and so does the hidden ideoligion every colonist carries in a game
+without the DLC, so most colonists refuse such a trim. A trim that still sets
+it is named in a warning at startup. Give it a `designatorDropdown`
 group with `includeEyeDropperTool` set as well: on its Floors tab, Better
 Architect Menu lists a button's trims one by one when none of them has such a
 group. A def gated on Neat Edges can name Neat Edges' own, `NE_TrimStraights`
@@ -223,7 +225,6 @@ A corner, put together:
   <uiIconPath>MyMod/Trims/MyTrimCorner_MenuIcon</uiIconPath>
   <!-- NE_TrimBase's building fields, and your own costs and stats -->
   <designationCategory>Floors</designationCategory>
-  <canGenerateDefaultDesignator>false</canGenerateDefaultDesignator>
   <designatorDropdown>NE_TrimCorners</designatorDropdown>
   <uiOrder>2100</uiOrder>
   <modExtensions>

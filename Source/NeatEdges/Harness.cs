@@ -155,6 +155,7 @@ namespace NeatEdges
             Guard("trims.strip", () => CaseStripTrim(map));
             Guard("trims.buttons", CaseTrimButtons);
             Guard("trims.buttons.rebuild", CaseTrimButtonsSurviveRebuild);
+            Guard("trims.buttons.everyTab", CaseTrimButtonsEveryTab);
             Guard("trims.buildable", () => CaseTrimsBuildable(map));
             Guard("trims.joins", () => CaseTrimJoinsGiven(map));
             Guard("trims.diagonal.ends", () => CaseDiagonalEndsOnMap(map));
@@ -1189,23 +1190,34 @@ namespace NeatEdges
 
         /// <summary>
         /// Every shape is one button on the Floors tab, holding that shape in
-        /// every style in uiOrder, and no trim has a button of its own. The tab
-        /// draws the buttons in the shapes' order. Each is a dropdown, so Copy
-        /// reaches each trim's own designator (trims.strip checks that per def);
-        /// its right-click menu lists the four styles; putting a style on it
-        /// changes its label; and every trim names its shape's dropdown group,
-        /// whose includeEyeDropperTool keeps Better Architect Menu from
-        /// unrolling the button.
+        /// every style in uiOrder, and no tab holds a button vanilla made for a
+        /// trim. The trims are ordinary buildables, so vanilla does make one per
+        /// shape group at startup, and Patch_TrimDesignators must be what took
+        /// them out (suppressed), not their absence. The tab draws the buttons
+        /// in the shapes' order. Each is a dropdown, so Copy reaches each trim's
+        /// own designator (trims.strip checks that per def); its right-click
+        /// menu lists the four styles; putting a style on it changes its label;
+        /// and every trim names its shape's dropdown group, whose
+        /// includeEyeDropperTool keeps Better Architect Menu from unrolling the
+        /// button.
         /// </summary>
         internal static void CaseTrimButtons()
         {
             DesignationCategoryDef floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors");
             List<Designator> buttons = floors?.AllResolvedDesignators ?? new List<Designator>();
-            List<string> ownButtons = buttons.OfType<Designator_Build>()
-                .Where(d => d.PlacingDef is ThingDef td && td.GetModExtension<TrimPiece>() != null)
-                .Select(d => d.PlacingDef.defName).ToList();
+            List<string> ownButtons = VanillaTrimButtons();
             Check(ownButtons.Count == 0, "trims.buttons.noOwnButtons",
-                "trims with a button of their own: " + string.Join(", ", ownButtons));
+                "vanilla buttons holding trims: " + string.Join(", ", ownButtons));
+
+            int onFloors = DefDatabase<ThingDef>.AllDefsListForReading.Count(d => floors != null
+                && d.designationCategory == floors && d.canGenerateDefaultDesignator && d.GetModExtension<TrimPiece>() != null);
+            Patch_TrimDesignators.Last.TryGetValue("Floors", out Patch_TrimDesignators.Stripped stripped);
+            Note("trims.buttons.suppressed", $"Floors built {stripped.rebuilds} time(s); the latest took {stripped.trims} "
+                + $"trims out of {stripped.buttons} vanilla buttons, and {onFloors} trims name Floors");
+            Check(Patch_TrimDesignators.Applied && stripped.rebuilds > 0 && onFloors > 0 && stripped.trims == onFloors,
+                "trims.buttons.suppressed",
+                $"patch applied {Patch_TrimDesignators.Applied} ({Patch_TrimDesignators.Failure ?? "no failure"}), "
+                + $"Floors built {stripped.rebuilds} time(s), {stripped.trims} trims taken out, {onFloors} expected");
 
             // The gizmo grid sorts by Order, stably, so this is the tab's order.
             List<Designator_TrimShape> shapeButtons = buttons.OfType<Designator_TrimShape>().ToList();
@@ -1294,6 +1306,7 @@ namespace NeatEdges
             Dictionary<TrimPiece.Kind, List<string>> held = before.OfType<Designator_TrimShape>()
                 .ToDictionary(b => b.shape, b => b.Elements.OfType<Designator_Build>()
                     .Select(e => e.PlacingDef.defName).ToList());
+            Patch_TrimDesignators.Last.TryGetValue("Floors", out Patch_TrimDesignators.Stripped was0);
 
             floors.ResolveReferences();
 
@@ -1316,7 +1329,81 @@ namespace NeatEdges
                 if (!held.TryGetValue(button.shape, out List<string> was) || !got.SequenceEqual(was))
                     problems.Add($"the {button.shape} button holds {string.Join(", ", got)}");
             }
+            // The rebuild made vanilla's trim buttons again, and the postfix
+            // ran inside it and took them out.
+            Patch_TrimDesignators.Last.TryGetValue("Floors", out Patch_TrimDesignators.Stripped now);
+            if (now.rebuilds != was0.rebuilds + 1 || now.trims == 0)
+                problems.Add($"the trim button patch did not strip the rebuild (builds {was0.rebuilds} then {now.rebuilds}, "
+                    + $"{now.trims} trims taken out)");
+            List<string> vanilla = VanillaTrimButtons();
+            if (vanilla.Count > 0) problems.Add("vanilla buttons holding trims: " + string.Join(", ", vanilla));
             Check(problems.Count == 0, "trims.buttons.rebuild", string.Join("; ", problems));
+        }
+
+        /// <summary>
+        /// Every tab rebuilt, as a mod that moves buildings between tabs may do,
+        /// leaves no button vanilla made for a trim on any of them, and the
+        /// shape buttons on Floors. Each rebuild must have run the postfix, or
+        /// a tab that was never rebuilt would pass.
+        ///
+        /// Runs after trims.buttons.rebuild, and leaves every tab rebuilt.
+        /// </summary>
+        internal static void CaseTrimButtonsEveryTab()
+        {
+            List<DesignationCategoryDef> tabs = DefDatabase<DesignationCategoryDef>.AllDefsListForReading;
+            Dictionary<string, int> builds = tabs.ToDictionary(t => t.defName,
+                t => Patch_TrimDesignators.Last.TryGetValue(t.defName, out Patch_TrimDesignators.Stripped s) ? s.rebuilds : 0);
+
+            foreach (DesignationCategoryDef tab in tabs)
+            {
+                tab.ResolveReferences();
+            }
+
+            List<string> missed = tabs.Where(t => !Patch_TrimDesignators.Last.TryGetValue(t.defName,
+                    out Patch_TrimDesignators.Stripped s) || s.rebuilds != builds[t.defName] + 1)
+                .Select(t => t.defName).ToList();
+            if (missed.Count > 0)
+            {
+                Check(false, "trims.buttons.everyTab",
+                    "the trim button patch did not run in the rebuild of " + string.Join(", ", missed) + ", so this proves nothing");
+                return;
+            }
+            var problems = new List<string>();
+            List<string> vanilla = VanillaTrimButtons();
+            if (vanilla.Count > 0) problems.Add("vanilla buttons holding trims: " + string.Join(", ", vanilla));
+            int shapes = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail("Floors")?.AllResolvedDesignators
+                .OfType<Designator_TrimShape>().Count() ?? 0;
+            if (shapes != FamilyShapes.Length) problems.Add($"{shapes} shape buttons on Floors, want {FamilyShapes.Length}");
+            Note("trims.buttons.everyTab", $"{tabs.Count} tabs rebuilt");
+            Check(problems.Count == 0, "trims.buttons.everyTab", string.Join("; ", problems));
+        }
+
+        /// <summary>
+        /// Every button on any tab, other than a shape button, that holds a trim:
+        /// a build of one, or a dropdown with one inside. Wider than the
+        /// patch's own test, which takes only the exact types vanilla makes, so
+        /// a change in those types fails here rather than passing both.
+        /// </summary>
+        internal static List<string> VanillaTrimButtons()
+        {
+            var found = new List<string>();
+            foreach (DesignationCategoryDef tab in DefDatabase<DesignationCategoryDef>.AllDefsListForReading)
+            {
+                foreach (Designator button in tab.AllResolvedDesignators)
+                {
+                    if (button is Designator_TrimShape) continue;
+                    if (Patch_TrimDesignators.IsTrim(button))
+                    {
+                        found.Add($"{tab.defName}: {((Designator_Build)button).PlacingDef.defName}");
+                    }
+                    else if (button is Designator_Dropdown dropdown)
+                    {
+                        found.AddRange(dropdown.Elements.Where(Patch_TrimDesignators.IsTrim)
+                            .Select(e => $"{tab.defName}: {((Designator_Build)e).PlacingDef.defName} in a dropdown"));
+                    }
+                }
+            }
+            return found;
         }
 
         // ---- the diagonal's joins on a real map -----------------------------
@@ -1642,14 +1729,18 @@ namespace NeatEdges
         // ---- who may build them -------------------------------------------
 
         /// <summary>
-        /// Every ideoligion's members may build every trim. The trims set
-        /// canGenerateDefaultDesignator false so the Floors tab shows a button
-        /// per shape rather than one per trim, and Ideo.MembersCanBuild reads
-        /// that flag as the mark of a building only some ideoligions may raise.
-        /// Every pawn carries an ideoligion, Ideology or not, and the one a game
-        /// without the DLC makes is not in classic mode, so from v1.1.0 to
-        /// v1.1.2 no colonist would build a trim in any game without Ideology,
-        /// nor in most games with it. The blueprint placed; the work was refused.
+        /// Every ideoligion's members may build every trim. Through v1.1.3 the
+        /// trims set canGenerateDefaultDesignator false so the Floors tab would
+        /// show a button per shape rather than one per trim, and
+        /// Ideo.MembersCanBuild reads that flag as the mark of a building only
+        /// some ideoligions may raise. Every pawn carries an ideoligion,
+        /// Ideology or not, and the one a game without the DLC makes is not in
+        /// classic mode, so from v1.1.0 to v1.1.2 no colonist would build a trim
+        /// in any game without Ideology, nor in most games with it; v1.1.3
+        /// patched MembersCanBuild. Now the trims leave the flag alone, so the
+        /// question is answered by the def and by no patch: notIdeoBuildings
+        /// checks the flag, and unpatched that Neat Edges no longer patches the
+        /// method, so the checks below cannot pass on a leftover patch.
         ///
         /// Asked of every ideoligion in the game that refuses others' buildings:
         /// one outside classic mode with no precept letting its members build
@@ -1669,6 +1760,15 @@ namespace NeatEdges
                 Skip("trims.buildable", trims.Count == 0 ? "no trims loaded" : "Gun_MiniTurret missing, so no control");
                 return;
             }
+
+            List<string> marked = trims.Where(d => !d.canGenerateDefaultDesignator).Select(d => d.defName).ToList();
+            Check(marked.Count == 0, "trims.buildable.notIdeoBuildings",
+                "trims setting canGenerateDefaultDesignator false, which Ideology reads as ideoligion buildings: "
+                + string.Join(", ", marked));
+            HarmonyLib.Patches patches = HarmonyLib.Harmony.GetPatchInfo(
+                HarmonyLib.AccessTools.Method(typeof(Ideo), nameof(Ideo.MembersCanBuild)));
+            Check(patches == null || !patches.Owners.Contains(HarmonyInit.Id), "trims.buildable.unpatched",
+                "Neat Edges patches Ideo.MembersCanBuild, so the checks below could pass on the patch and not on the trims");
 
             List<Ideo> all = Find.IdeoManager.IdeosListForReading;
             List<Ideo> strict = all.Where(i => !i.classicMode

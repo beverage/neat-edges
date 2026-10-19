@@ -74,11 +74,15 @@
     <!-- On the Floors tab, but not as a button each: every shape is one
          button (NeatEdges.Designator_TrimShape), its styles on a right-click
          menu, and each shape's abstract def below names its dropdown group
-         (Defs/Misc/NeatEdges_TrimShapes.xml). Still buildable, with blueprints
-         and frames, because BuildableByPlayer asks only for a
-         designationCategory. -->
+         (Defs/Misc/NeatEdges_TrimShapes.xml). Vanilla's own buttons for the
+         trims are taken off the tab by NeatEdges.Patch_TrimDesignators.
+
+         Never set canGenerateDefaultDesignator false here, the field that
+         keeps vanilla from making those buttons: Ideology reads it as a
+         building only some ideoligions may raise, and through v1.1.3, which
+         set it, no colonist built a trim without the DLC, nor in most games
+         with it. -->
     <designationCategory>Floors</designationCategory>
-    <canGenerateDefaultDesignator>false</canGenerateDefaultDesignator>
     <constructionSkillPrerequisite>3</constructionSkillPrerequisite>
     <building>
       <isEdifice>false</isEdifice>
