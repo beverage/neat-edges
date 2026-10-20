@@ -157,6 +157,7 @@ namespace NeatEdges
             Guard("trims.buttons.rebuild", CaseTrimButtonsSurviveRebuild);
             Guard("trims.buttons.everyTab", CaseTrimButtonsEveryTab);
             Guard("trims.buildable", () => CaseTrimsBuildable(map));
+            Guard("trims.worthless", () => CaseTrimsWorthless(map));
             Guard("trims.joins", () => CaseTrimJoinsGiven(map));
             Guard("trims.diagonal.ends", () => CaseDiagonalEndsOnMap(map));
             Guard("trims.diagonal.refresh", () => CaseDiagonalRefresh(map));
@@ -1842,6 +1843,88 @@ namespace NeatEdges
                 $"{colonist.LabelShort} of {colonist.Ideo.name} refused a {border.defName} blueprint: "
                 + (Verse.AI.JobFailReason.Reason ?? "no reason given"));
             Verse.AI.JobFailReason.Clear();
+            Clear();
+        }
+
+        // ---- what they are worth -----------------------------------------
+
+        /// <summary>The packageId of Floors Are (Absolutely) Worthless.</summary>
+        internal const string WorthlessFloors = "Hawkwood.FloorsAreAlmostWorthless";
+
+        /// <summary>
+        /// With Floors Are (Absolutely) Worthless active, every trim is worth
+        /// nothing, as every built floor is, and a built trim adds nothing to the
+        /// colony's wealth; without it, both carry their value. NE_TrimBase holds
+        /// a MarketValue of 0 under MayRequire on that mod, which the game drops
+        /// when the mod is not active.
+        ///
+        /// Each run asserts the arm it is in: the default list has no such mod
+        /// and checks the trims carry value, and
+        /// <c>--with hawkwood.floorsarealmostworthless</c> checks they carry
+        /// none. The wood floor is the control: worthless when the mod is active
+        /// and valued when it is not, or the case is reading a game where the mod
+        /// did nothing. Then a floor border is built and the wealth watcher
+        /// recounted, since building wealth is what raids are sized from.
+        /// </summary>
+        internal static void CaseTrimsWorthless(Map map)
+        {
+            List<ThingDef> trims = AllTrims().Select(t => DefDatabase<ThingDef>.GetNamedSilentFail(t.name))
+                .Where(d => d != null).ToList();
+            TerrainDef floor = DefDatabase<TerrainDef>.GetNamedSilentFail("WoodPlankFloor");
+            if (trims.Count == 0 || floor == null)
+            {
+                Skip("trims.worthless", trims.Count == 0 ? "no trims loaded" : "WoodPlankFloor missing, so no control");
+                return;
+            }
+
+            bool worthless = ModLister.AllModsActiveNoSuffix(new List<string> { WorthlessFloors });
+            string arm = worthless ? "with Floors Are (Absolutely) Worthless" : "without Floors Are (Absolutely) Worthless";
+            float floorValue = floor.GetStatValueAbstract(StatDefOf.MarketValue);
+            Note("trims.worthless.arm", $"{arm}; the wood floor is worth {floorValue:0.##}");
+            Check(worthless ? floorValue == 0f : floorValue > 0f, "trims.worthless.control",
+                $"{arm}, the wood floor is worth {floorValue:0.##}, so this game is not the arm it claims to be");
+
+            var wrong = new List<string>();
+            float least = float.MaxValue, most = 0f;
+            foreach (ThingDef def in trims)
+            {
+                float value = def.GetStatValueAbstract(StatDefOf.MarketValue, GenStuff.DefaultStuffFor(def));
+                least = Math.Min(least, value);
+                most = Math.Max(most, value);
+                if (worthless ? value != 0f : value <= 0f) wrong.Add($"{def.defName} {value:0.##}");
+            }
+            Note("trims.worthless.defs", $"{trims.Count} trims in their default material, worth {least:0.##} to {most:0.##}");
+            Check(wrong.Count == 0, "trims.worthless.defs",
+                $"{arm}, {wrong.Count} of {trims.Count} trims are worth the wrong amount: {string.Join(", ", wrong.Take(6))}"
+                + (wrong.Count > 6 ? ", ..." : ""));
+
+            Clear();
+            ThingDef border = trims[0];
+            IntVec3 cell = IntVec3.Invalid;
+            foreach (IntVec3 c in GenRadial.RadialCellsAround(Origin(map), 12f, true))
+            {
+                if (c.InBounds(map) && c.GetThingList(map).Count == 0
+                    && GenConstruct.CanPlaceBlueprintAt(border, c, Rot4.South, map,
+                        stuffDef: GenStuff.DefaultStuffFor(border)).Accepted)
+                {
+                    cell = c;
+                    break;
+                }
+            }
+            if (!cell.IsValid)
+            {
+                Skip("trims.worthless.wealth", "no free cell near the middle of the map to build a trim on");
+                return;
+            }
+
+            map.wealthWatcher.ForceRecount();
+            float before = map.wealthWatcher.WealthBuildings;
+            Place(map, cell, border, Rot4.South);
+            map.wealthWatcher.ForceRecount();
+            float added = map.wealthWatcher.WealthBuildings - before;
+            Note("trims.worthless.wealth", $"a built {border.defName} added {added:0.##} to the colony's building wealth");
+            Check(worthless ? Math.Abs(added) < 0.001f : added > 0f, "trims.worthless.wealth",
+                $"{arm}, a built {border.defName} changed the colony's building wealth by {added:0.##}");
             Clear();
         }
 

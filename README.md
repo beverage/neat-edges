@@ -101,6 +101,12 @@ which is where a diagonal border's band runs. Diagonal floors you build in those
 shapes get the same treatment. Every other tile keeps its soft blend, including
 one that a hard edge only reaches at a corner.
 
+**With Floors Are (Absolutely) Worthless**, the trims are worth nothing too, as
+the floors they edge are. They add nothing to your colony's wealth, which raids
+are sized from, and nothing to a room's wealth. Their beauty stays as it is.
+Without that mod they are valued from their material and the work to build
+them, as before.
+
 You can add it to a running save. Before removing it, use **Clear hard edge
 area** on every map you painted: a save that still holds the area loses the
 map's whole area list, home area included. Clearing the last painted tile
@@ -210,6 +216,11 @@ to `NE_TrimDiagonals`. Give it a `uiOrder` above 2096, where Neat Edges' trims
 end: a button shows its lowest-ordered style and takes that style's place on
 the tab, so a lower number puts your style on the button's face and moves the
 button.
+
+Neat Edges' trims are worth nothing while Floors Are (Absolutely) Worthless is
+active. To do the same with yours, add
+`<MarketValue MayRequire="Hawkwood.FloorsAreAlmostWorthless">0</MarketValue>` to
+their `statBases`; the game skips it whenever that mod is not active.
 
 A corner, put together:
 

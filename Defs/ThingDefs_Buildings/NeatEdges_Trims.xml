@@ -62,8 +62,16 @@
     <tradeability>None</tradeability>
     <leaveResourcesWhenKilled>false</leaveResourcesWhenKilled>
     <resourcesFractionWhenDeconstructed>0</resourcesFractionWhenDeconstructed>
+    <!-- MarketValue 0 only while Floors Are (Absolutely) Worthless is active:
+         that mod sets every built floor's market value to 0, so floors add
+         nothing to colony wealth or to raids, and a trim is part of the floor
+         to a player. A statBases entry naming a market value replaces the one
+         worked out from material and work, so this holds for every material.
+         Without that mod the game skips the entry, and the trims are valued
+         as before. -->
     <statBases>
       <Flammability>0.5</Flammability>
+      <MarketValue MayRequire="Hawkwood.FloorsAreAlmostWorthless">0</MarketValue>
     </statBases>
     <stuffCategories>
       <li>Woody</li>

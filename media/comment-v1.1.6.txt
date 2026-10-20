@@ -1,0 +1,5 @@
+v1.1.6 update:
+
+With Floors Are (Absolutely) Worthless active, floor borders are worth nothing too, so they add nothing to your colony's wealth or to a room's. Borders you have already built count the same way. Without that mod nothing changes.
+
+Mod authors: one MarketValue line in a border's statBases does the same for yours. The README on GitHub has it.
