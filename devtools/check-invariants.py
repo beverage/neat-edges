@@ -219,13 +219,15 @@ def check_preview():
 # ------------------------------------------------------------ workshop comments
 
 # The comment posted under the Workshop item at each update lives in
-# media/comment-v*.txt. Steam takes at most 1,000 characters in a comment, so a
-# longer draft cannot be posted as written, and the file then disagrees with
-# what went out: the v1.1.0 draft was 1,244 characters and was cut to 705 by
-# hand while posting. Counted without the file's final newline, each newline
-# once.
+# media/comments/comment-v*.txt. Steam takes at most 1,000 characters in a
+# comment, so a longer draft cannot be posted as written, and the file then
+# disagrees with what went out: the v1.1.0 draft was 1,244 characters and was
+# cut to 705 by hand while posting. Counted without the file's final newline,
+# each newline once. A comment or change note left in media/ itself fails too,
+# since the length check reads only media/comments/.
 COMMENT_MAX = 1000
 COMMENT_NAME = re.compile(r"comment-v.+\.txt")
+CHANGELOG_NAME = re.compile(r"changelog-v.+\.bbcode")
 
 
 def check_workshop_comments():
@@ -233,13 +235,21 @@ def check_workshop_comments():
     if not os.path.isdir(media):
         return
     for name in sorted(os.listdir(media)):
+        if COMMENT_NAME.fullmatch(name):
+            fail("comment", "media/%s belongs in media/comments/" % name)
+        elif CHANGELOG_NAME.fullmatch(name):
+            fail("comment", "media/%s belongs in media/changelogs/" % name)
+    comments = os.path.join(media, "comments")
+    if not os.path.isdir(comments):
+        return
+    for name in sorted(os.listdir(comments)):
         if not COMMENT_NAME.fullmatch(name):
             continue
-        with open(os.path.join(media, name), encoding="utf-8") as handle:
+        with open(os.path.join(comments, name), encoding="utf-8") as handle:
             text = handle.read().rstrip("\n")
         if len(text) > COMMENT_MAX:
-            fail("comment", "media/%s is %d characters; Steam takes at most %d "
-                 "in a Workshop comment" % (name, len(text), COMMENT_MAX))
+            fail("comment", "media/comments/%s is %d characters; Steam takes at "
+                 "most %d in a Workshop comment" % (name, len(text), COMMENT_MAX))
 
 
 # ------------------------------------------------------------ private tracking

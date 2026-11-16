@@ -128,9 +128,9 @@ rotatable straight) and its border art (a corner is two strips overlapping).
 
 ## Change notes and comments
 
-`changelog-v*.bbcode` is each update's change note, pasted into the Workshop's
-change notes; validate it with `bbcode-preview.py` like the page.
-`comment-v*.txt` is the comment posted under the item at the same update:
+`changelogs/changelog-v*.bbcode` is each update's change note, pasted into the
+Workshop's change notes; validate it with `bbcode-preview.py` like the page.
+`comments/comment-v*.txt` is the comment posted under the item at the same update:
 "vX update:", then one sentence per change saying what it is, ending on what
 did not change. Steam takes at most 1,000 characters in a comment, and
 `devtools/check-invariants.py` fails a longer file. If the text changes while
