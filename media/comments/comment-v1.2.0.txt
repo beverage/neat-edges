@@ -1,0 +1,7 @@
+v1.2.0 update:
+
+The seven floor border buttons have moved off the Floors tab, to the end of the Misc tab. With Better Architect Menu they get a Trims section on its Decorate tab instead. The hard edge marker stays on Floors.
+
+To have them on Floors again, untick the box in Neat Edges' mod settings. A note at the main menu says this once, with a button that puts them back.
+
+Better Architect Menu users who have rearranged Decorate in its edit mode: add the Trims section there with the + button, or the borders sit in Miscellaneous under World.
