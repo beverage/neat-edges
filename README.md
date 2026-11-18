@@ -28,7 +28,19 @@ All of it is in the Architect menu:
   corner, and a diagonal. Built from wood, stone or metal (pebbles from stone),
   they take paint, and each hardens the edges it covers. On the vine, paint
   colours only the vine itself, its leaves and stem, so a wooden vine painted
-  green is a green vine on a wooden border.
+  green is a green vine on a wooden border. Since version 1.2 the seven
+  buttons sit at the end of the Misc tab, clear of the floors. With Better
+  Architect Menu, which has no Misc tab, they get a Trims section of their own
+  on its Decorate tab instead. If you have added, removed or dragged sections
+  on Decorate in that mod's edit mode, its saved list has no Trims section, so
+  the buttons go to its Miscellaneous section under World; add Trims to
+  Decorate with the edit mode's + button, and they move there the next time
+  you open the Architect. To have them among the floors again, untick
+  **Put the floor borders on the Misc tab** in the mod settings (with Better
+  Architect Menu the box reads **Put the floor borders under Decorate, in a
+  Trims section**). The hard edge marker stays on Floors either way. Version
+  1.2 says all this once, in a note at the main menu, with a button that puts
+  them back.
 
 The marker and the area draw nothing on the map. The floor you already laid
 meets the boundary cleanly instead of being washed over.
@@ -199,11 +211,13 @@ beside it already seal that corner, so an empty list there would harden a tile
 it only touches.
 
 Every buildable def carrying a `NeatEdges.TrimPiece` joins the button for its
-shape on the Floors tab, as one more style on that button's right-click menu,
-and Neat Edges takes the button the game would make for it off its tab, so a
-mod adding a style adds no buttons. It needs a `designationCategory`, since the
-game counts a def without one as not buildable, but which tab it names makes no
-difference: each shape has one button, and it is on Floors. Leave
+shape, as one more style on that button's right-click menu, and Neat Edges
+takes the button the game would make for it off its tab, so a mod adding a
+style adds no buttons. It needs a `designationCategory`, since the game counts
+a def without one as not buildable, but which tab it names makes no
+difference: each shape has one button, at the end of the Misc tab, in the
+Trims section of Better Architect Menu's Decorate tab while that mod is
+loaded, or on the Floors tab for a player who unticks the mod setting. Leave
 `canGenerateDefaultDesignator` alone. Through Neat Edges 1.1.3 this README
 asked for it to be false; Ideology reads false as a building only some ideoligions
 may build, and so does the hidden ideoligion every colonist carries in a game

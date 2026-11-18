@@ -710,6 +710,69 @@ that one was never published.
   terrain, so each shape's abstract def names a group with it set. Search
   matches a button's label only, so while a search runs the button shows the
   first style it matches, read from the Architect tab by reflection.
+  Since 2026-11-18 a mod setting puts the seven on the Misc tab instead,
+  after a player found them crowding Floors, which vanilla already fills with
+  its floors, while Misc holds a few spots, graves and beacons. It was added
+  off by default, since every player had found them on Floors since v1.1.0,
+  and made the default the same day, once the Trims section below existed:
+  both new homes read better than Floors, and the one cost of moving them, a
+  player who looks on Floors and finds nothing, is met by telling each player
+  once (`WhatsNewNote`, below). Every tab that
+  can hold them names the seven classes, vanilla makes the buttons on each,
+  and the same postfix that strips vanilla's trim buttons takes the shape
+  buttons off every tab but the chosen one, so the choice survives every
+  rebuild the way the buttons do. Moving
+  the defs' `designationCategory` would have moved nothing: a shape button
+  holds every trim whatever tab its def names, and appears on whichever tabs
+  name its class. On Misc the buttons' orders gain 1000: vanilla's egg
+  box (2060) and pen marker (2065) fall among the trims' 2060 to 2066, and
+  every Misc building that sets no order gets 2999, so from 3060 the row
+  stays whole, after everything else on the tab. Better Architect Menu has no
+  Misc tab: it re-files every vanilla Misc building into its own categories and
+  shows what is left as the Miscellaneous section of its World tab, a long way
+  from anything to do with floors. So while it is loaded the setting sends
+  them to a Trims section of Neat Edges' own on its Decorate tab instead,
+  after its windows (`Defs/Misc/NeatEdges_BetterArchitect.xml`, nested by that
+  mod's `NestedCategoryExtension`), with `MayRequire` on the def so a game
+  without it has no empty tab. Unticked, the section holds no buildables, and
+  that mod hides a section with none. It still keeps the section in its list,
+  though, and reopens each tab on the section it last showed while that
+  section's def exists, so a player who left Decorate on Trims and then
+  unticked the box would find Decorate open on an empty panel. The rebuild
+  that empties the section therefore removes it from that memory (a private
+  static dictionary from main tab to open section, reached by reflection
+  through the section's nesting extension), and that mod falls back to the
+  tab's first listed section. Failing to reach it costs that empty panel and
+  nothing else. That mod's edit mode can hide the section too: once a player
+  adds, removes or drags a section on a tab, it saves that tab's whole list
+  and draws only what is in it, and a Decorate list saved before 1.2 has no
+  Trims section. So the section is the home only while that mod's own methods
+  say a tab the player can open lists it; otherwise the seven go to Misc,
+  which it shows under World. The layout loads after the tabs are first
+  built, so the home is checked again each time the Architect opens, and the
+  tabs are rebuilt only when the home holds none of the seven. That mod takes integrations as patches in its own repo,
+  one folder per mod, but these buttons cannot move that way: the section has
+  to be a home `PlaceShapeButtons` knows, or it strips the buttons from it like
+  any other tab.
+  The move is announced by `WhatsNewNote`, a window at the main menu that
+  says where the seven went, names the box by the label the settings window
+  shows, and offers a button that unticks it. It shows once per player: the
+  settings keep the id of the last note closed, and a note is marked seen when
+  it closes, written through `Mod.WriteSettings` because the game writes the
+  file only when the settings window closes. A release with something to say
+  gives the note a new id and new text keys; one without keeps the id. It
+  opens from a postfix on `UIRoot_Entry.Init`, which builds the main menu's
+  interface in its own startup event after the data load, and is where vanilla
+  opens its version-update dialog; a static constructor's
+  `ExecuteWhenFinished` runs at the end of the data load, when
+  `Find.WindowStack` is still null. A start that leaves the main menu at once,
+  a quick test or a start into a save, opens it and loses it to the scene
+  change, which discards the window without closing it, so it stays due. A new player sees it too: no
+  version before 1.2.0 wrote a settings file, so nothing tells an update from
+  a first install. Vehicle Framework shows its update log once too, through
+  its author's update-log dll, which records the showing by rewriting a file
+  in the mod's own folder; this keeps it in the settings file instead, outside
+  the folder Steam manages, with no second dll.
   Vanilla's own button for each trim, which `ResolveDesignators` makes for
   every def with a designation category, is taken off its tab by
   `Patch_TrimDesignators`, a postfix on that method applied from

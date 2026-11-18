@@ -18,6 +18,10 @@ namespace NeatEdges
     ///                                            applied by hand and only while it is
     ///                                            installed; passes the method through
     ///                                            untouched if its anchor is missing
+    ///   <see cref="Patch_WhatsNewAtMenu"/>       opens the one-time update note at the
+    ///                                            main menu
+    ///   <see cref="Patch_PlaceTrimsOnOpen"/>     moves the trims' shape buttons as the
+    ///                                            Architect opens, when their home changed
     ///
     /// One more is applied earlier, from <see cref="NeatEdgesMod"/>'s constructor,
     /// because the game builds each Architect tab's buttons before any static

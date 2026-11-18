@@ -148,8 +148,12 @@ do
     --no-dlc) NO_DLC=1 ;;
     --with)
       [ $# -ge 2 ] || { printf 'error: --with needs a packageId\n' >&2; exit 2; }
-      MINIMAL_MODS+=("$2")
-      WITH="$WITH $2"
+      # Lowercased, as the game writes its own list: 1.7 loads a mixed-case
+      # entry but ModsConfig.IsActive and MayRequire both miss it, so
+      # --with ferny.BetterArchitect would load the mod without its section.
+      id="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+      MINIMAL_MODS+=("$id")
+      WITH="$WITH $id"
       shift
       ;;
     *) printf 'unknown option: %s (--full | --exclusive | --no-dlc | --with <packageId>)\n' "$1" >&2; exit 2 ;;
