@@ -13,6 +13,24 @@
   <!-- A trim shape's build button: one button, the shape's styles on its right-click menu -->
   <NeatEdges.TrimShapeStyles>Right-click for the other styles.</NeatEdges.TrimShapeStyles>
 
+  <!-- The mod settings: whether the trim buttons leave the Floors tab, ticked
+       by default since 1.2. One checkbox, worded for where they go: the Misc
+       tab, or with Better Architect Menu loaded, a Trims section on its
+       Decorate tab. -->
+  <NeatEdges.SettingTrimsOnMisc>Put the floor borders on the Misc tab</NeatEdges.SettingTrimsOnMisc>
+  <NeatEdges.SettingTrimsOnMiscDesc>On, the default: the seven floor border buttons sit at the end of the Misc tab. The hard edge marker stays on Floors.\n\nOff: they sit on the Floors tab, among the floors, as before version 1.2.\n\nThe buttons move straight away, in a running game too.</NeatEdges.SettingTrimsOnMiscDesc>
+  <NeatEdges.SettingTrimsOnDecorate>Put the floor borders under Decorate, in a Trims section</NeatEdges.SettingTrimsOnDecorate>
+  <NeatEdges.SettingTrimsOnDecorateDesc>On, the default: the seven floor border buttons sit in a Trims section of their own on the Decorate tab, which Neat Edges adds while Better Architect Menu is loaded. The hard edge marker stays on Floors.\n\nOff: they sit on the Floors tab, among the floors, as before version 1.2.\n\nThe buttons move straight away, in a running game too.</NeatEdges.SettingTrimsOnDecorateDesc>
+
+  <!-- Shown once at the main menu, after updating to 1.2: where the floor
+       borders went, and how to put them back. {0} is the setting's own label
+       above, so the note names the box the player would untick. -->
+  <NeatEdges.WhatsNew_1_2_0_Title>Neat Edges 1.2: the floor borders have moved</NeatEdges.WhatsNew_1_2_0_Title>
+  <NeatEdges.WhatsNew_1_2_0_Decorate>The seven floor border buttons have left the Floors tab, where they crowded the floors. With Better Architect Menu they have a Trims section of their own on the Decorate tab. The hard edge marker is still on Floors.\n\nTo have them among the floors again, press Back to the Floors tab, or untick "{0}" in Neat Edges' mod settings. The box moves them either way at any time, in a running game too.\n\nThis note shows only once.</NeatEdges.WhatsNew_1_2_0_Decorate>
+  <NeatEdges.WhatsNew_1_2_0_Misc>The seven floor border buttons have left the Floors tab, where they crowded the floors. They are at the end of the Misc tab now. The hard edge marker is still on Floors.\n\nTo have them among the floors again, press Back to the Floors tab, or untick "{0}" in Neat Edges' mod settings. The box moves them either way at any time, in a running game too.\n\nThis note shows only once.</NeatEdges.WhatsNew_1_2_0_Misc>
+  <NeatEdges.WhatsNewKeep>Keep them there</NeatEdges.WhatsNewKeep>
+  <NeatEdges.WhatsNewBackToFloors>Back to the Floors tab</NeatEdges.WhatsNewBackToFloors>
+
   <!-- The overlay toggle on the bottom-right row -->
   <NeatEdges.OverlayToggle>Show hard edges: every tile with a hard edge marker on it, and the painted hard edge area.</NeatEdges.OverlayToggle>
 

@@ -425,10 +425,12 @@ it. Keep it even though a diagonal looks right inside one section:
 `trims.diagonal.refresh` builds across a section edge on purpose. The placing
 ghost has no thing, so it reads the map at its own cell.
 
-**Each shape is one button, always on Floors, made by vanilla.** Each shape
+**Each shape is one button, on the tab the mod setting picks, made by
+vanilla.** Each shape
 has a `Designator_TrimShape` subclass (`Designator_TrimStraight` and so on),
-named in the Floors tab's `specialDesignatorClasses` by
-`Patches/NeatEdges_Designators.xml`, and each holds every def that carries a
+named in the Floors and Misc tabs' `specialDesignatorClasses` by
+`Patches/NeatEdges_Designators.xml` (and in the Trims section's, below), and
+each holds every def that carries a
 `TrimPiece` of its shape and a designation category (any: vanilla counts a def
 without one as not buildable), lowest `uiOrder` first. Vanilla makes a button
 of its own for every trim as well, and `Patch_TrimDesignators` takes those off
@@ -455,6 +457,108 @@ its shape's dropdown group, set on the shape's abstract def, with
 unrolling a dropdown on its Floors tab; vanilla reads it for terrain only. The
 Architect's search filter is read by reflection and fails soft to the style on
 the button (`trims.buttons.searchReadable` reports which).
+
+**Which tab holds them is a mod setting, on by default since 1.2.0.**
+`NeatEdgesSettings.trimsOffFloors` (added 2026-11-18, from a player who found
+seven trim buttons crowding the Floors tab, and made the default the same day)
+moves them off Floors: to the end of Misc, or, while Better Architect Menu is
+loaded, to a Trims section on its Decorate tab. Unticked, they stay on Floors.
+Vanilla makes the buttons on every tab that names their classes, and
+`Patch_TrimDesignators.PlaceShapeButtons`, inside the same postfix, takes them
+off every one but the home `HomeFor` picks. Every player before 1.2.0 found the
+trims on Floors, so `WhatsNewNote` tells each player once where they went
+(below); never move them again without a note of its own. A button leaves a tab only when its home names its class too,
+and an away tab that lost the classes is passed over, so the buttons fall back
+down the list (section, Misc, Floors) and never land on no tab. On Misc each
+button's `Order` gains `MiscOffset` (1000): the egg box (2060) and the pen
+marker (2065) sit inside the trims' 2060 to 2066 there, and would split the row
+(`trims.buttons.tab.misc` checks nothing sorts among or after it). The settings
+are read in `NeatEdgesMod`'s constructor, before the first build of any tab;
+ticking the box rebuilds every tab that names the buttons at once and clears
+Copy's designator cache, which would otherwise hold designators from the buttons
+just thrown away. `trims.buttons.startup` runs first, checks the run starts off
+Floors, and pins the buttons to Floors for the cases after it;
+`trims.buttons.tab.*` flips the setting in the run and puts it back, and
+`trims.buttons.unpin`, last, restores the run's own setting.
+
+**The update note shows once per player, and is marked seen when it closes.**
+`WhatsNewNote.Current` is the note's id; the settings keep the id of the last
+note the player closed, and a different one is due. A release with something to
+say gives the note a new id and new text keys, and one without keeps the id, so
+nobody sees anything. Seen is recorded on close, not on open, so a window lost
+to a scene change shows again, and it is written at once through
+`Mod.WriteSettings`, because the game writes the file only when the settings
+window closes. It opens from a postfix on `UIRoot_Entry.Init`, where vanilla
+opens its own update dialog, and never from a static constructor: those run
+inside the data load, before the main menu has a window stack, and the first
+build threw there unseen while every harness case passed. A start that leaves
+the main menu at once, a quick test or a start into a save, opens it and loses
+it to the scene change, which discards the window without closing it, so it
+stays due (`whatsNew.sceneChange` asserts both halves). Never skip it by reading
+`-quicktest`: shipping code reads no launch flag (`check-invariants.py`). How it
+looks and what its buttons write is a lab capture. A player who has
+already unticked the box is not shown 1.2.0's note, which is about the move;
+it is marked seen instead. Its body names the box by the label the settings window shows, read
+from the same keys, so the two cannot drift apart. A new player sees 1.2.0's
+note as well, since no earlier version wrote a settings file and nothing tells
+an update from an install; it is worded to make sense either way. Never record
+the showing in the mod's own folder: a Workshop update replaces that folder.
+
+**The Trims section is a def that exists only with Better Architect Menu.**
+`Defs/Misc/NeatEdges_BetterArchitect.xml` carries `MayRequire` on the def
+itself: the loader skips such a def before reading a field, so without that mod
+there is no empty tab and its extension class is never looked up. The nesting
+is that mod's `BetterArchitect.NestedCategoryExtension`, naming its Decorate
+tab, `Ferny_Decorations`: two strings in someone else's code, so check them
+when it updates. `trims.buttons.tab.section` reads the nesting back on a run
+with it (`--with ferny.BetterArchitect`) and asserts the section's absence on a
+run without. Integrations for Better Architect Menu are usually pull requests
+to that mod's own folder of per-mod patches; this one cannot be, because the
+buttons are placed by `PlaceShapeButtons`, and a section it does not know is a
+tab it strips them from. With the box unticked the section holds no buildables
+and that mod hides it, but it keeps the section in its list and goes back to
+the section a tab last had open, so Decorate would open on an empty panel for a
+player who left it on Trims. `ForgetTrimsSection` therefore runs after any
+rebuild that leaves the section empty, and removes the Trims section from that
+mod's private `selectedCategory` dictionary (main tab to open section), found
+through the section's nesting extension and matched by defName; other tabs'
+choices stay. A third string in someone else's code: if it moves, or the
+dictionary stops mapping to defs, the reset leaves the memory alone and
+`trims.buttons.tab.sectionMemory` fails.
+
+**That mod's saved layout can hide the section, so the home is checked as the
+Architect opens.** Its edit mode saves a tab's whole list of sections once the
+player adds, removes or drags one there, and then draws only the listed ones; a
+Decorate list saved before 1.2.0 has no Trims section, and the seven would sit
+on no tab. `SectionListed` asks that mod's own public methods
+(`EditModeRuntime.GetParents`, `GetChildrenForParent`,
+`BetterArchitectSettings.ShouldSkipParentCategory`) whether any tab the player
+can open lists a section, and `AwayFor` passes over an away tab when none does,
+so the buttons go to Misc, which that mod nests under World, and to Floors if a
+World list leaves Misc out as well. Its layout loads in a long event queued
+from its Mod constructor, after the tabs' first build and after the main menu's
+interface (`Root.Start` queues that before the data load). Until then
+`BetterArchitectSettings.mod` is null, and `SectionListed` asks nothing and
+counts the section as shown, as that mod's defaults do: asking earlier would
+fill its caches from an empty layout. So a check at build time alone cannot see
+a saved layout. `Patch_PlaceTrimsOnOpen`, a postfix on
+`MainTabWindow_Architect.PreOpen`, therefore calls `PlaceIfMoved`, which
+rebuilds the tabs only when the home holds none of the seven, and not again
+for a home a rebuild itself left empty, so a mod that takes them off inside
+every rebuild costs one rebuild, not one per opening. That mod drops its cached rows on the
+first frame after an opening, so it draws the new lists. A layout change made
+in the open Architect shows at the next opening. That mod draws only inside
+vanilla's Architect window, which it casts the tab window to (with Dub's Mint
+Menus active it fills that mod's wheel from the same window), so the hook sees
+every opening its layout governs. Four more names in someone else's
+code, the three methods and the `mod` field; if any is missing the section
+counts as shown, which is right for a version without edit mode, and
+`trims.buttons.tab.sectionListed` fails on the current one. The methods are
+looked up once per assembly, since the setting's label and the update note ask
+every frame they draw. Both read `AwayIsTrimsSection`, so both name Misc for
+such a player (not World's Miscellaneous section; the README and the 1.2.0
+change note say where that is). `trimsOffFloors` is saved even at its default,
+so a player who keeps the move keeps it if the default ever changes.
 
 **The trims leave `canGenerateDefaultDesignator` true; vanilla's buttons for
 them are taken off the tabs instead.** That flag is the only def field that

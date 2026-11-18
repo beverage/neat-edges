@@ -37,17 +37,22 @@ namespace NeatEdges
     /// reflection; if that field ever moves, search simply finds the style on
     /// the button, as it does for vanilla's dropdowns.
     ///
-    /// Each shape's button is a subclass below, named in the Floors tab's
-    /// specialDesignatorClasses (Patches/NeatEdges_Designators.xml), so
-    /// vanilla makes the buttons itself whenever it builds that tab's list.
+    /// Each shape's button is a subclass below, named in the Floors and Misc
+    /// tabs' specialDesignatorClasses (Patches/NeatEdges_Designators.xml), and
+    /// in the Trims section added under Better Architect Menu's Decorate tab
+    /// while that mod is loaded (Defs/Misc/NeatEdges_BetterArchitect.xml), so
+    /// vanilla makes the buttons itself whenever it builds any of those lists.
     /// It builds it once at startup, and again whenever anything calls the
     /// category's ResolveReferences: Adaptive Storage - Global Settings does,
     /// on every new game and load, once a player has moved a storage building
     /// to another tab. Buttons added to the list at startup, as these were in
     /// v1.1.0 and v1.1.1, are thrown away by that rebuild and never come back.
+    /// <see cref="Patch_TrimDesignators.PlaceShapeButtons"/> keeps them on the
+    /// tab the mod settings point to, off Floors by default, and takes them
+    /// off the others.
     ///
     /// A button holds every trim of its shape, whatever tab the trim's def
-    /// names: one button per shape, always on Floors. The def still needs a
+    /// names: one button per shape, on that one tab. The def still needs a
     /// designationCategory, because vanilla counts a def without one as not
     /// buildable by the player; Copy finds the trim's designator on any tab.
     /// Vanilla makes a button of its own for every trim too, the trims being
@@ -72,6 +77,17 @@ namespace NeatEdges
         /// the buttons last, and before anything ordered higher.
         /// </summary>
         internal const float TieBreak = 0.01f;
+
+        /// <summary>
+        /// Added to the button's Order on the Misc tab, by
+        /// <see cref="Patch_TrimDesignators.PlaceShapeButtons"/>. Vanilla's own
+        /// Misc buildings that set a uiOrder run from 2000 to 2200, and the egg
+        /// box's 2060 and the pen marker's 2065 fall among the trims' 2060 to
+        /// 2066, so at their Floors orders the row of trims would split around
+        /// them. A building that sets no uiOrder gets 2999. With this added the
+        /// row starts at 3060, after all of them, in the same order.
+        /// </summary>
+        internal const float MiscOffset = 1000f;
 
         /// <summary>
         /// Every buildable def drawn as this shape, Neat Edges' and other
@@ -184,9 +200,10 @@ namespace NeatEdges
     }
 
     // One per shape, because vanilla makes a special designator from its type
-    // alone. Patches/NeatEdges_Designators.xml names each of them, and
+    // alone. Patches/NeatEdges_Designators.xml names each of them on two tabs
+    // and Defs/Misc/NeatEdges_BetterArchitect.xml on a third, and
     // check-shipped-dll.py requires each by name. No save stores them, so a
-    // rename costs only those two files.
+    // rename costs only those three files.
 
     public class Designator_TrimStraight : Designator_TrimShape
     {

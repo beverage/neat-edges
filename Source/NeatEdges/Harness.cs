@@ -10,6 +10,7 @@
 // about the assembly that goes out. check-invariants.py enforces it.
 #if HARNESS
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -153,9 +154,15 @@ namespace NeatEdges
             Guard("trims.render", CaseTrimRender);
             Guard("trims.geometry", CaseStripGeometry);
             Guard("trims.strip", () => CaseStripTrim(map));
+            Guard("trims.buttons.startup", CaseTrimButtonsStartup);   // pins Floors for the cases below
             Guard("trims.buttons", CaseTrimButtons);
             Guard("trims.buttons.rebuild", CaseTrimButtonsSurviveRebuild);
             Guard("trims.buttons.everyTab", CaseTrimButtonsEveryTab);
+            Guard("trims.buttons.tab", CaseTrimButtonsTab);
+            Guard("trims.buttons.tab.sectionMemory", CaseTrimSectionMemory);
+            Guard("trims.buttons.reopen", CaseTrimButtonsReopen);
+            Guard("whatsNew", CaseWhatsNew);
+            Guard("trims.buttons.unpin", CaseTrimButtonsUnpin);       // puts the startup setting back
             Guard("trims.buildable", () => CaseTrimsBuildable(map));
             Guard("trims.worthless", () => CaseTrimsWorthless(map));
             Guard("trims.joins", () => CaseTrimJoinsGiven(map));
@@ -1377,6 +1384,628 @@ namespace NeatEdges
             if (shapes != FamilyShapes.Length) problems.Add($"{shapes} shape buttons on Floors, want {FamilyShapes.Length}");
             Note("trims.buttons.everyTab", $"{tabs.Count} tabs rebuilt");
             Check(problems.Count == 0, "trims.buttons.everyTab", string.Join("; ", problems));
+        }
+
+        /// <summary>
+        /// The mod setting that moves the shape buttons off Floors: to the
+        /// Trims section under Better Architect Menu's Decorate tab while that
+        /// mod is loaded, and to Misc without it.
+        /// A fresh setting is on, so a player who never opens the settings
+        /// finds the buttons off Floors (trims.buttons.startup checks this
+        /// run's placement before pinning Floors); the mod lists itself in the
+        /// settings window, sharing the one settings object the window writes
+        /// (default). The Trims section loads exactly when Better
+        /// Architect Menu does, nested under Decorate through that mod's own
+        /// extension class (section). Floors, Misc and the section where it
+        /// loaded all name every shape class, so vanilla makes the buttons on
+        /// each, and the postfix took all seven off every one but Floors
+        /// (named). Ticked, the tabs rebuild at once: the buttons' new home
+        /// draws the seven in the shapes' order, every other tab draws none,
+        /// and Copy finds every trim's designator on one of them. The home is
+        /// the Trims section with Better Architect Menu (section.home), and
+        /// Misc without it (misc), where the seven run as one row after every
+        /// other button. Unticked, the seven are back on Floors at their own
+        /// orders and no other tab holds one (back). The setting is put back
+        /// however the case ends.
+        ///
+        /// Runs after trims.buttons.everyTab, and leaves every tab it touched
+        /// rebuilt.
+        /// </summary>
+        internal static void CaseTrimButtonsTab()
+        {
+            DesignationCategoryDef floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.FloorsTab);
+            DesignationCategoryDef misc = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.MiscTab);
+            DesignationCategoryDef section = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.TrimsSection);
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            if (floors == null || misc == null || settings == null)
+            {
+                Check(false, "trims.buttons.tab",
+                    $"Floors found {floors != null}, Misc found {misc != null}, settings read {settings != null}");
+                return;
+            }
+
+            NeatEdgesMod mod = LoadedModManager.GetMod<NeatEdgesMod>();
+            bool freshOff = new NeatEdgesSettings().trimsOffFloors;
+            bool shared = mod != null && mod.GetSettings<NeatEdgesSettings>() == settings;
+            string listed = mod?.SettingsCategory();
+            Check(freshOff && shared && !listed.NullOrEmpty(),
+                "trims.buttons.tab.default",
+                $"a fresh setting says off Floors {freshOff}, "
+                + $"the window's settings are this one {shared}, listed as \"{listed}\"");
+
+            // Whether Better Architect Menu loaded is read from its own Decorate
+            // tab, not ModsConfig.IsActive: 1.7 loads a mod from a mixed-case
+            // entry in ModsConfig.xml, while IsActive and MayRequire both miss
+            // it, so asking IsActive would agree with a skipped section.
+            bool bam = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(BetterArchitectDecorate) != null;
+            string parent = NestedParent(section);
+            Check(bam == (section != null) && (section == null || parent == BetterArchitectDecorate),
+                "trims.buttons.tab.section",
+                $"Better Architect Menu loaded {bam} (ModsConfig says active {ModsConfig.IsActive(BetterArchitectId)}), "
+                + $"the Trims section loaded {section != null}"
+                + (section == null ? "" : $", nested under {parent ?? "nothing"}, want {BetterArchitectDecorate}"));
+
+            List<DesignationCategoryDef> holders = new[] { floors, misc, section }.Where(t => t != null).ToList();
+            List<Type> shapeTypes = typeof(Designator_TrimShape).Assembly.GetTypes()
+                .Where(t => t.IsSubclassOf(typeof(Designator_TrimShape)) && !t.IsAbstract).ToList();
+            var unnamed = new List<string>();
+            foreach (Type type in shapeTypes)
+            {
+                foreach (DesignationCategoryDef holder in holders)
+                {
+                    if (!holder.specialDesignatorClasses.Contains(type)) unnamed.Add($"{holder.defName} lacks {type.Name}");
+                }
+            }
+            var named = new List<string>();
+            foreach (DesignationCategoryDef holder in holders)
+            {
+                if (holder == floors) continue;
+                Patch_TrimDesignators.Last.TryGetValue(holder.defName, out Patch_TrimDesignators.Stripped built);
+                if (built.shapes != shapeTypes.Count) named.Add($"{holder.defName}'s latest build took {built.shapes} shape buttons off");
+                int stray = ShapeButtonsOn(holder);
+                if (stray > 0) named.Add($"{stray} on {holder.defName}");
+            }
+            int onFloors = ShapeButtonsOn(floors);
+            if (onFloors != FamilyShapes.Length) named.Add($"{onFloors} on Floors, want {FamilyShapes.Length}");
+            Check(shapeTypes.Count == FamilyShapes.Length && unnamed.Count == 0 && named.Count == 0,
+                "trims.buttons.tab.named",
+                $"{shapeTypes.Count} shape classes on {string.Join(", ", holders.Select(t => t.defName))} "
+                + $"({string.Join(", ", unnamed)}); {string.Join("; ", named)}");
+
+            DesignationCategoryDef away = Patch_TrimDesignators.AwayFor(typeof(Designator_TrimStraight)) ?? misc;
+            string awayCase = away == section ? "trims.buttons.tab.section.home" : "trims.buttons.tab.misc";
+            var moved = new List<string>();
+            bool wasOff = settings.trimsOffFloors;
+            try
+            {
+                Dictionary<DesignationCategoryDef, List<Designator>> before =
+                    holders.ToDictionary(t => t, t => t.AllResolvedDesignators.ToList());
+                settings.trimsOffFloors = true;
+                Patch_TrimDesignators.RebuildShapeTabs();
+
+                if (holders.Any(t => t.AllResolvedDesignators.Any(before[t].Contains)))
+                    moved.Add("a tab was not rebuilt, so this proves nothing");
+                List<Designator_TrimShape> shapes = away.AllResolvedDesignators.OfType<Designator_TrimShape>().ToList();
+                List<TrimPiece.Kind> drawn = shapes.OrderBy(b => b.Order).Select(b => b.shape).ToList();
+                if (!drawn.SequenceEqual(FamilyShapes))
+                    moved.Add($"{away.defName}'s shape buttons, in drawing order: " + string.Join(", ", drawn));
+
+                List<Designator> tab = away.AllResolvedDesignators.ToList();
+                tab.SortStable((a, b) => a.Order.CompareTo(b.Order));
+                if (away == misc)
+                {
+                    // The gizmo grid sorts by Order, stably: every other button on
+                    // Misc must come before the first shape button, or the row
+                    // splits around it, as it would around the egg box (2060) and
+                    // the pen marker (2065) at the Floors orders.
+                    int first = tab.FindIndex(d => d is Designator_TrimShape);
+                    List<string> after = first < 0 ? new List<string>()
+                        : tab.Skip(first).Where(d => !(d is Designator_TrimShape)).Select(d => $"{d.Label} ({d.Order})").ToList();
+                    if (after.Count > 0) moved.Add("on Misc these sort among or after the trims: " + string.Join(", ", after));
+                }
+                Note(awayCase, $"{away.defName} holds {tab.Count} buttons; the trims run from "
+                    + $"{(shapes.Count > 0 ? shapes.Min(b => b.Order) : 0f)} to {(shapes.Count > 0 ? shapes.Max(b => b.Order) : 0f)}");
+
+                foreach (DesignationCategoryDef other in holders.Where(t => t != away))
+                {
+                    int left = ShapeButtonsOn(other);
+                    if (left > 0) moved.Add($"{left} shape buttons still on {other.defName}");
+                }
+
+                foreach (ThingDef def in DefDatabase<ThingDef>.AllDefsListForReading)
+                {
+                    if (def.GetModExtension<TrimPiece>() == null || def.designationCategory == null) continue;
+                    Designator_Build copy = BuildCopyCommandUtility.FindAllowedDesignator(def);
+                    if (copy == null || !shapes.Any(b => b.Elements.Contains(copy)))
+                        moved.Add($"Copy of {def.defName} finds " + (copy == null ? "nothing" : $"a designator on no {away.defName} button"));
+                }
+            }
+            finally
+            {
+                settings.trimsOffFloors = wasOff;
+                Patch_TrimDesignators.RebuildShapeTabs();
+            }
+            Check(moved.Count == 0, awayCase, string.Join("; ", moved));
+
+            var back = new List<string>();
+            List<Designator_TrimShape> home = floors.AllResolvedDesignators.OfType<Designator_TrimShape>().ToList();
+            List<TrimPiece.Kind> homeDrawn = home.OrderBy(b => b.Order).Select(b => b.shape).ToList();
+            if (!homeDrawn.SequenceEqual(FamilyShapes))
+                back.Add("Floors' shape buttons, in drawing order: " + string.Join(", ", homeDrawn));
+            back.AddRange(home.Where(b => b.current == null
+                    || Math.Abs(b.Order - (b.current.Order + Designator_TrimShape.TieBreak)) > 0.001f)
+                .Select(b => $"the {b.shape} button's order is {b.Order}, not its face style's plus the tie-break"));
+            foreach (DesignationCategoryDef other in holders.Where(t => t != floors))
+            {
+                int stayed = ShapeButtonsOn(other);
+                if (stayed > 0) back.Add($"{stayed} shape buttons still on {other.defName}");
+            }
+            Check(back.Count == 0, "trims.buttons.tab.back", string.Join("; ", back));
+        }
+
+        /// <summary>
+        /// Better Architect Menu's memory of which section each of its tabs had
+        /// open. Decorate is set to remember the Trims section, and Misc,
+        /// standing for any other tab, to remember itself. With the buttons in
+        /// the Trims section a rebuild leaves both; with them back on Floors it
+        /// forgets the Trims section and leaves Misc's. Reading the memory at
+        /// all proves its field still has the name and shape this mod reads,
+        /// so failing to is a failure while the section loaded. Skipped without
+        /// that mod, which has no section to remember. The memory and the
+        /// setting are put back however the case ends.
+        /// </summary>
+        internal static void CaseTrimSectionMemory()
+        {
+            const string name = "trims.buttons.tab.sectionMemory";
+            DesignationCategoryDef section = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.TrimsSection);
+            if (section == null)
+            {
+                Skip(name, "no Trims section without Better Architect Menu");
+                return;
+            }
+            DesignationCategoryDef decorate = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(BetterArchitectDecorate);
+            DesignationCategoryDef misc = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.MiscTab);
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            IDictionary memory = Patch_TrimDesignators.SectionMemory(section);
+            if (memory == null || decorate == null || misc == null || settings == null)
+            {
+                Check(false, name, $"the memory read {memory != null} ({Patch_TrimDesignators.SectionMemoryFailure ?? "no reason"}), "
+                    + $"Decorate found {decorate != null}, Misc found {misc != null}, settings read {settings != null}");
+                return;
+            }
+
+            var saved = new List<DictionaryEntry>();
+            foreach (DictionaryEntry entry in memory) saved.Add(entry);
+            bool wasOff = settings.trimsOffFloors;
+            var problems = new List<string>();
+            try
+            {
+                memory.Clear();
+                memory[decorate] = section;
+                memory[misc] = misc;
+
+                settings.trimsOffFloors = true;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                if (!memory.Contains(decorate)) problems.Add("forgot the Trims section while it holds the buttons");
+                if (!memory.Contains(misc)) problems.Add("forgot Misc's section while the buttons were in the Trims section");
+
+                settings.trimsOffFloors = false;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                if (memory.Contains(decorate)) problems.Add("still remembers the Trims section with the buttons on Floors");
+                if (!memory.Contains(misc)) problems.Add("forgot Misc's section too");
+                if (Patch_TrimDesignators.SectionMemoryFailure != null)
+                    problems.Add("the reset reports " + Patch_TrimDesignators.SectionMemoryFailure);
+            }
+            finally
+            {
+                settings.trimsOffFloors = wasOff;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                memory.Clear();
+                foreach (DictionaryEntry entry in saved) memory[entry.Key] = entry.Value;
+            }
+            Check(problems.Count == 0, name, string.Join("; ", problems));
+        }
+
+        /// <summary>
+        /// The check made as the Architect opens. Its postfix is on the
+        /// PreOpen that MainTabWindow_Architect itself declares
+        /// (reopen.hooked), and with the buttons already on their home it
+        /// rebuilds nothing, since it runs at every opening (reopen.inPlace:
+        /// Floors' rebuild count is unchanged). With the buttons taken off
+        /// their home between openings, each next opening puts them back;
+        /// with a postfix taking them off inside every rebuild, the opening
+        /// after the one that rebuilt does not rebuild again (reopen.once). With Better Architect Menu (tab.sectionListed):
+        /// that mod's layout is read through its own methods, and a fresh one
+        /// shows the Trims section; then Decorate gets a saved list of
+        /// sections without it, as that mod's edit mode saved before 1.2,
+        /// which is not read while that mod's loaded marker is unset; the next
+        /// opening moves the seven to Misc, with none left in the section or
+        /// on Floors, and the setting's label and the note name Misc; a saved
+        /// list for Misc's own tab without Misc sends them on to Floors; with
+        /// both added back, the next opening moves them back to the section.
+        /// The setting and the layouts are put back however the case ends.
+        /// That part is skipped without that mod.
+        /// </summary>
+        internal static void CaseTrimButtonsReopen()
+        {
+            // Declared there, or the postfix would sit on Window.PreOpen and
+            // run as every window opens.
+            System.Reflection.MethodInfo preOpen = HarmonyLib.AccessTools.Method(
+                typeof(MainTabWindow_Architect), nameof(MainTabWindow_Architect.PreOpen));
+            HarmonyLib.Patches open = preOpen == null ? null : HarmonyLib.Harmony.GetPatchInfo(preOpen);
+            bool hooked = preOpen?.DeclaringType == typeof(MainTabWindow_Architect)
+                && open != null && open.Postfixes.Any(p => p.owner == HarmonyInit.Id
+                && p.PatchMethod.DeclaringType == typeof(Patch_PlaceTrimsOnOpen));
+            Check(hooked, "trims.buttons.reopen.hooked",
+                $"no postfix of ours on PreOpen declared by MainTabWindow_Architect (declared by {preOpen?.DeclaringType?.Name ?? "nothing"})");
+
+            int FloorsRebuilds() => Patch_TrimDesignators.Last.TryGetValue(Patch_TrimDesignators.FloorsTab,
+                out Patch_TrimDesignators.Stripped built) ? built.rebuilds : 0;
+            int rebuildsBefore = FloorsRebuilds();
+            bool rebuilt = Patch_TrimDesignators.PlaceIfMoved();
+            Check(!rebuilt && FloorsRebuilds() == rebuildsBefore, "trims.buttons.reopen.inPlace",
+                $"with the buttons home, the check reported a rebuild {rebuilt}, "
+                + $"and Floors was rebuilt {FloorsRebuilds() - rebuildsBefore} times");
+
+            // Something takes the buttons off their home between openings:
+            // each next opening puts them back. Something takes them off
+            // inside every rebuild (a postfix after ours, for the length of
+            // this check): the opening after the one that rebuilt leaves the
+            // tabs alone rather than rebuild every time.
+            DesignationCategoryDef home = Patch_TrimDesignators.HomeFor(typeof(Designator_TrimStraight));
+            var stripper = new HarmonyLib.Harmony(HarmonyInit.Id + ".harness.strip");
+            try
+            {
+                var steps = new List<string>();
+                for (int round = 1; round <= 2; round++)
+                {
+                    home.AllResolvedDesignators.RemoveAll(d => d is Designator_TrimShape);
+                    bool rebuiltNow = Patch_TrimDesignators.PlaceIfMoved();
+                    int back = ShapeButtonsOn(home);
+                    if (!rebuiltNow || back != FamilyShapes.Length)
+                        steps.Add($"taken off between openings, round {round}: rebuilt {rebuiltNow}, {back} of {FamilyShapes.Length} back");
+                }
+
+                stripShapesFrom = home.defName;
+                stripper.Patch(Patch_TrimDesignators.Resolve,
+                    postfix: new HarmonyLib.HarmonyMethod(typeof(Harness), nameof(StripShapes)) { priority = HarmonyLib.Priority.Last });
+                home.AllResolvedDesignators.RemoveAll(d => d is Designator_TrimShape);
+                bool tried = Patch_TrimDesignators.PlaceIfMoved();
+                int left = ShapeButtonsOn(home);
+                int beforeSecond = FloorsRebuilds();
+                bool second = Patch_TrimDesignators.PlaceIfMoved();
+                if (!tried || left != 0 || second || FloorsRebuilds() != beforeSecond)
+                    steps.Add($"taken off inside every rebuild: first opening rebuilt {tried} leaving {left}; "
+                        + $"second rebuilt {second}, Floors rebuilt {FloorsRebuilds() - beforeSecond} times");
+                Check(steps.Count == 0, "trims.buttons.reopen.once", $"on {home.defName}: " + string.Join("; ", steps));
+            }
+            finally
+            {
+                stripper.UnpatchAll(stripper.Id);
+                stripShapesFrom = null;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                Patch_TrimDesignators.PlaceIfMoved();
+            }
+
+            const string name = "trims.buttons.tab.sectionListed";
+            DesignationCategoryDef section = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.TrimsSection);
+            if (section == null)
+            {
+                Skip(name, "no Trims section without Better Architect Menu");
+                return;
+            }
+            DesignationCategoryDef floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.FloorsTab);
+            DesignationCategoryDef misc = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.MiscTab);
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            bool fresh = Patch_TrimDesignators.SectionListed(section);
+            string freshFailure = Patch_TrimDesignators.LayoutFailure;
+
+            // That mod's saved layouts, written here as its edit mode would:
+            // main tab to a list of sections that replaces the default one.
+            System.Reflection.Assembly assembly = Patch_TrimDesignators.Nesting(section).GetType().Assembly;
+            const System.Reflection.BindingFlags statics = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public;
+            Type settingsType = assembly.GetType("BetterArchitect.BetterArchitectSettings");
+            IDictionary layouts = settingsType?.GetField("parentOverrides", statics)?.GetValue(null) as IDictionary;
+            System.Reflection.FieldInfo loaded = settingsType?.GetField("mod", statics);
+            object loadedMod = loaded?.GetValue(null);
+            Type layoutType = assembly.GetType("BetterArchitect.ParentOverride");
+            string miscParent = NestedParent(misc);
+            if (!fresh || freshFailure != null || layouts == null || layoutType == null || loadedMod == null
+                || floors == null || misc == null || miscParent == null || settings == null)
+            {
+                Check(false, name, $"a fresh layout shows the section {fresh} ({freshFailure ?? "read"}), "
+                    + $"saved layouts found {layouts != null}, their type found {layoutType != null}, "
+                    + $"that mod's loaded marker set {loadedMod != null}, Floors found {floors != null}, "
+                    + $"Misc found {misc != null} and nested under {miscParent ?? "nothing"}, settings read {settings != null}");
+                return;
+            }
+
+            object Frozen(string tab, List<string> sections)
+            {
+                object layout = Activator.CreateInstance(layoutType);
+                layoutType.GetField("parentDefName")?.SetValue(layout, tab);
+                layoutType.GetField("replaceDefaultChildren").SetValue(layout, true);
+                layoutType.GetField("childCategoryIds").SetValue(layout, sections);
+                return layout;
+            }
+
+            var problems = new List<string>();
+            void Expect(string when, DesignationCategoryDef home)
+            {
+                foreach (DesignationCategoryDef tab in new[] { floors, misc, section })
+                {
+                    int want = tab == home ? FamilyShapes.Length : 0;
+                    int there = ShapeButtonsOn(tab);
+                    if (there != want) problems.Add($"{when}: {there} shape buttons on {tab.defName}, want {want}");
+                }
+            }
+
+            var savedLayouts = new List<DictionaryEntry>();
+            foreach (DictionaryEntry entry in layouts) savedLayouts.Add(entry);
+            bool wasOff = settings.trimsOffFloors;
+            try
+            {
+                settings.trimsOffFloors = true;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                Expect("ticked, fresh layout", section);
+
+                List<string> listed = DefDatabase<DesignationCategoryDef>.AllDefsListForReading
+                    .Where(d => d != section && NestedParent(d) == BetterArchitectDecorate)
+                    .Select(d => d.defName).ToList();
+                layouts[BetterArchitectDecorate] = Frozen(BetterArchitectDecorate, listed);
+
+                // Before that mod has loaded its settings, its layout is not asked.
+                loaded.SetValue(null, null);
+                try
+                {
+                    if (!Patch_TrimDesignators.SectionListed(section))
+                        problems.Add("before that mod loaded its settings, its saved list was read");
+                }
+                finally
+                {
+                    loaded.SetValue(null, loadedMod);
+                }
+
+                if (Patch_TrimDesignators.SectionListed(section)) problems.Add("a Decorate list without the section still shows it");
+                if (!Patch_TrimDesignators.PlaceIfMoved()) problems.Add("the opening left the buttons in the hidden section");
+                Expect("section left off Decorate's saved list", misc);
+                if (Patch_TrimDesignators.AwayIsTrimsSection || !WhatsNewNote.Body().Contains("NeatEdges.SettingTrimsOnMisc".Translate()))
+                    problems.Add("with the section hidden, the setting's label or the note does not name Misc");
+
+                // Misc is a section too: a list for its tab without it leaves
+                // Floors, the last of the list.
+                List<string> beside = DefDatabase<DesignationCategoryDef>.AllDefsListForReading
+                    .Where(d => d != misc && NestedParent(d) == miscParent)
+                    .Select(d => d.defName).ToList();
+                layouts[miscParent] = Frozen(miscParent, beside);
+                if (!Patch_TrimDesignators.PlaceIfMoved()) problems.Add($"the opening left the buttons on Misc, missing from {miscParent}'s list");
+                Expect($"Misc left off {miscParent}'s saved list as well", floors);
+                beside.Add(misc.defName);
+
+                listed.Add(Patch_TrimDesignators.TrimsSection);
+                if (!Patch_TrimDesignators.SectionListed(section)) problems.Add("the list with the section added back does not show it");
+                if (!Patch_TrimDesignators.PlaceIfMoved()) problems.Add("the opening left the buttons on Floors");
+                Expect("section added back to Decorate's list", section);
+                if (Patch_TrimDesignators.LayoutFailure != null) problems.Add("the layout read reports " + Patch_TrimDesignators.LayoutFailure);
+            }
+            finally
+            {
+                layouts.Clear();
+                foreach (DictionaryEntry entry in savedLayouts) layouts[entry.Key] = entry.Value;
+                settings.trimsOffFloors = wasOff;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                Patch_TrimDesignators.PlaceIfMoved();
+            }
+            Check(problems.Count == 0, name, string.Join("; ", problems));
+        }
+
+        const string BetterArchitectId = "ferny.BetterArchitect";
+        const string BetterArchitectDecorate = "Ferny_Decorations";
+
+        static int ShapeButtonsOn(DesignationCategoryDef tab) =>
+            tab.AllResolvedDesignators.OfType<Designator_TrimShape>().Count();
+
+        /// <summary>The tab <see cref="StripShapes"/> empties, or null.</summary>
+        static string stripShapesFrom;
+
+        /// <summary>
+        /// Stands in for another mod that takes the shape buttons off a tab
+        /// inside its rebuild, after Neat Edges has placed them; patched on
+        /// only for the length of reopen.once.
+        /// </summary>
+        static void StripShapes(DesignationCategoryDef __instance)
+        {
+            if (stripShapesFrom != null && __instance?.defName == stripShapesFrom)
+                __instance.AllResolvedDesignators.RemoveAll(d => d is Designator_TrimShape);
+        }
+
+        /// <summary>
+        /// The parent tab Better Architect Menu's nesting extension on a
+        /// category names, read by reflection, since its class is in that
+        /// mod's assembly; null when the category or the extension is missing.
+        /// </summary>
+        static string NestedParent(DesignationCategoryDef category)
+        {
+            DefModExtension nesting = Patch_TrimDesignators.Nesting(category);
+            return (nesting?.GetType().GetField("parentCategory")?.GetValue(nesting) as Def)?.defName;
+        }
+
+        /// <summary>
+        /// Every tab that can hold the shape buttons, Floors first, and the
+        /// one they leave Floors for: the Trims section where it loaded and
+        /// Better Architect Menu shows it, Misc otherwise. Null when Floors or
+        /// Misc is missing.
+        /// </summary>
+        static List<DesignationCategoryDef> ShapeHolders(out DesignationCategoryDef floors, out DesignationCategoryDef away)
+        {
+            floors = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.FloorsTab);
+            DesignationCategoryDef misc = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.MiscTab);
+            DesignationCategoryDef section = DefDatabase<DesignationCategoryDef>.GetNamedSilentFail(Patch_TrimDesignators.TrimsSection);
+            away = Patch_TrimDesignators.AwayFor(typeof(Designator_TrimStraight)) ?? misc;
+            if (floors == null || misc == null) return null;
+            return new[] { floors, misc, section }.Where(t => t != null).ToList();
+        }
+
+        /// <summary>The setting this run started with, which trims.buttons.unpin puts back.</summary>
+        static bool startupOffFloors;
+        static bool startupRead;
+
+        /// <summary>
+        /// Where the shape buttons are when the game starts with no settings
+        /// file, as it does for a player who never opened the mod settings:
+        /// off Floors, all seven in their order in the Trims section with
+        /// Better Architect Menu and on Misc without it, and none on any other
+        /// tab. Then pins the buttons to Floors, so the cases after it test
+        /// the Floors tab, its tie-break and its rebuilds as they always have;
+        /// trims.buttons.unpin puts this run's setting back.
+        /// </summary>
+        internal static void CaseTrimButtonsStartup()
+        {
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            List<DesignationCategoryDef> holders = ShapeHolders(out DesignationCategoryDef floors, out DesignationCategoryDef away);
+            if (holders == null || settings == null)
+            {
+                Check(false, "trims.buttons.startup", $"Floors and Misc found {holders != null}, settings read {settings != null}");
+                return;
+            }
+            startupOffFloors = settings.trimsOffFloors;
+            startupRead = true;
+
+            var problems = new List<string>();
+            if (!settings.trimsOffFloors) problems.Add("this run's setting keeps the buttons on Floors");
+            List<TrimPiece.Kind> drawn = away.AllResolvedDesignators.OfType<Designator_TrimShape>()
+                .OrderBy(b => b.Order).Select(b => b.shape).ToList();
+            if (!drawn.SequenceEqual(FamilyShapes))
+                problems.Add($"{away.defName}'s shape buttons, in drawing order: " + string.Join(", ", drawn));
+            foreach (DesignationCategoryDef other in holders.Where(t => t != away))
+            {
+                int stray = ShapeButtonsOn(other);
+                if (stray > 0) problems.Add($"{stray} shape buttons on {other.defName}");
+            }
+            Check(problems.Count == 0, "trims.buttons.startup", string.Join("; ", problems));
+
+            settings.trimsOffFloors = false;
+            Patch_TrimDesignators.RebuildShapeTabs();
+            Note("trims.buttons.startup", $"started on {away.defName}; pinned to Floors for the cases that follow, "
+                + $"which leaves {ShapeButtonsOn(floors)} shape buttons there");
+        }
+
+        /// <summary>
+        /// Puts back the setting this run started with, and the seven with it:
+        /// on the tab trims.buttons.startup found them on.
+        /// </summary>
+        internal static void CaseTrimButtonsUnpin()
+        {
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            List<DesignationCategoryDef> holders = ShapeHolders(out DesignationCategoryDef floors, out DesignationCategoryDef away);
+            if (!startupRead || holders == null || settings == null)
+            {
+                Skip("trims.buttons.unpin", "trims.buttons.startup never read the setting");
+                return;
+            }
+            settings.trimsOffFloors = startupOffFloors;
+            Patch_TrimDesignators.RebuildShapeTabs();
+            DesignationCategoryDef home = startupOffFloors ? away : floors;
+            int there = ShapeButtonsOn(home);
+            Check(there == FamilyShapes.Length, "trims.buttons.unpin",
+                $"{there} shape buttons back on {home.defName}, want {FamilyShapes.Length}");
+        }
+
+        /// <summary>
+        /// The one-time update note. It opens from a postfix on the main menu's
+        /// interface build, UIRoot_Entry.Init, the point where vanilla opens
+        /// its own update dialog (hooked). This run's quick start built the
+        /// main menu before leaving it, so the note opened there, and the
+        /// scene change threw it away without closing it: it is not open now,
+        /// and with no settings file it is still due for the next visit to the
+        /// main menu (sceneChange). Closing it
+        /// records its id in the settings, after which it is no longer due
+        /// (once). Every key it uses has English text, and its body names the
+        /// setting by the label this run's mod list shows, the Trims section
+        /// one with Better Architect Menu and the Misc one without (text). Its
+        /// Back to the Floors tab button unticks the setting and puts the seven
+        /// on Floors at once, with none left on any other tab (backToFloors).
+        /// The settings are put back however the case ends.
+        /// </summary>
+        internal static void CaseWhatsNew()
+        {
+            NeatEdgesSettings settings = NeatEdgesMod.Settings;
+            List<DesignationCategoryDef> holders = ShapeHolders(out DesignationCategoryDef floors, out DesignationCategoryDef away);
+            if (holders == null || settings == null)
+            {
+                Check(false, "whatsNew", $"Floors and Misc found {holders != null}, settings read {settings != null}");
+                return;
+            }
+            string seen = settings.whatsNewSeen;
+            bool wasOff = settings.trimsOffFloors;
+            // Closing the note writes the settings file, with the setting this
+            // case's run has pinned to Floors; the file is read back here and
+            // then put back byte for byte, or removed if there was none.
+            NeatEdgesMod mod = LoadedModManager.GetMod<NeatEdgesMod>();
+            string file = mod == null ? null : typeof(LoadedModManager)
+                .GetMethod("GetSettingsFilename", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?.Invoke(null, new object[] { mod.Content.FolderName, mod.GetType().Name }) as string;
+            byte[] fileBefore = file != null && File.Exists(file) ? File.ReadAllBytes(file) : null;
+            try
+            {
+                HarmonyLib.Patches menu = HarmonyLib.Harmony.GetPatchInfo(
+                    HarmonyLib.AccessTools.Method(typeof(UIRoot_Entry), nameof(UIRoot_Entry.Init)));
+                bool hooked = menu != null && menu.Postfixes.Any(p => p.owner == HarmonyInit.Id
+                    && p.PatchMethod.DeclaringType == typeof(Patch_WhatsNewAtMenu));
+                Check(hooked, "whatsNew.hooked", "no postfix of ours on UIRoot_Entry.Init");
+
+                bool lingering = Find.WindowStack.IsOpen<Dialog_WhatsNew>();
+                Check(WhatsNewNote.OpenedThisRun && !lingering && seen == null && WhatsNewNote.Due, "whatsNew.sceneChange",
+                    $"opened at the main menu {WhatsNewNote.OpenedThisRun}, open in this scene {lingering}, "
+                    + $"seen \"{seen ?? "nothing"}\", due {WhatsNewNote.Due}");
+
+                settings.whatsNewSeen = null;
+                bool dueBefore = WhatsNewNote.Due;
+                WhatsNewNote.MarkSeen();
+                string want = "<whatsNewSeen>" + WhatsNewNote.Current + "</whatsNewSeen>";
+                bool written = file != null && File.Exists(file) && File.ReadAllText(file).Contains(want);
+                Check(dueBefore && !WhatsNewNote.Due && settings.whatsNewSeen == WhatsNewNote.Current && written, "whatsNew.once",
+                    $"due before closing {dueBefore}, due after {WhatsNewNote.Due}, "
+                    + $"seen \"{settings.whatsNewSeen ?? "nothing"}\", want \"{WhatsNewNote.Current}\"; "
+                    + $"the settings file {(file == null ? "could not be named" : file)} holds {want} {written}");
+
+                bool section = away.defName == Patch_TrimDesignators.TrimsSection;
+                string label = (section ? "NeatEdges.SettingTrimsOnDecorate" : "NeatEdges.SettingTrimsOnMisc").Translate();
+                string body = WhatsNewNote.Body();
+                List<string> missing = new[]
+                {
+                    "NeatEdges.WhatsNew_1_2_0_Title", "NeatEdges.WhatsNew_1_2_0_Decorate", "NeatEdges.WhatsNew_1_2_0_Misc",
+                    "NeatEdges.WhatsNewKeep", "NeatEdges.WhatsNewBackToFloors",
+                }.Where(key => !key.CanTranslate()).ToList();
+                Check(missing.Count == 0 && body.Contains("\"" + label + "\"") && !body.Contains("{0}"), "whatsNew.text",
+                    $"keys without text: {(missing.Count == 0 ? "none" : string.Join(", ", missing))}; "
+                    + $"the body names \"{label}\" {body.Contains("\"" + label + "\"")}");
+
+                settings.trimsOffFloors = true;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                WhatsNewNote.PutBackOnFloors();
+                var back = new List<string>();
+                if (settings.trimsOffFloors) back.Add("the setting still says off Floors");
+                int onFloors = ShapeButtonsOn(floors);
+                if (onFloors != FamilyShapes.Length) back.Add($"{onFloors} shape buttons on Floors, want {FamilyShapes.Length}");
+                foreach (DesignationCategoryDef other in holders.Where(t => t != floors))
+                {
+                    int left = ShapeButtonsOn(other);
+                    if (left > 0) back.Add($"{left} shape buttons still on {other.defName}");
+                }
+                Check(back.Count == 0, "whatsNew.backToFloors", string.Join("; ", back));
+            }
+            finally
+            {
+                settings.whatsNewSeen = seen;
+                settings.trimsOffFloors = wasOff;
+                Patch_TrimDesignators.RebuildShapeTabs();
+                if (file != null)
+                {
+                    if (fileBefore != null) File.WriteAllBytes(file, fileBefore);
+                    else if (File.Exists(file)) File.Delete(file);
+                }
+            }
         }
 
         /// <summary>

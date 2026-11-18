@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- A Trims section on Better Architect Menu's Decorate tab, where the seven
+       shape buttons go by default while that mod is loaded; a player who
+       unticks the mod setting has them on Floors. Without that mod they go to
+       vanilla's Misc tab instead.
+
+       MayRequire on the def itself: the game skips a top-level def whose
+       MayRequire is unmet before it reads a field of it (LoadedModManager,
+       1.6.4871 and 1.7.5011), so a player without Better Architect Menu never
+       loads this def, never sees an empty tab, and the extension's class from
+       that mod's assembly is never looked up. Better Architect Menu ships its
+       own Toxic Waste section the same way.
+
+       Nesting is that mod's feature: BetterArchitect.NestedCategoryExtension
+       is a class in its assembly, and Ferny_Decorations its Decorate tab's
+       defName. Check both when it updates; the harness case
+       trims.buttons.tab.section reads the nesting back in a run with it
+       loaded.
+
+       The shape classes are named here as on Floors and Misc, and
+       NeatEdges.Patch_TrimDesignators takes them off every tab but the one
+       the setting picks, so with the box unticked this section holds no
+       buildables and Better Architect Menu hides it. Order 790 puts it after
+       that mod's Windows (850) and before its Outdoor (600); the tab lists its
+       sections highest order first. -->
+
+  <DesignationCategoryDef MayRequire="ferny.BetterArchitect">
+    <defName>NE_Trims</defName>
+    <label>trims</label>
+    <description>Floor borders: visible trim along the edges of a floor, in every style and shape.</description>
+    <order>790</order>
+    <specialDesignatorClasses>
+      <li>Designator_Cancel</li>
+      <li>Designator_Deconstruct</li>
+      <li>NeatEdges.Designator_TrimStraight</li>
+      <li>NeatEdges.Designator_TrimCorner</li>
+      <li>NeatEdges.Designator_TrimInsideCorner</li>
+      <li>NeatEdges.Designator_TrimRunner</li>
+      <li>NeatEdges.Designator_TrimEndCap</li>
+      <li>NeatEdges.Designator_TrimFrame</li>
+      <li>NeatEdges.Designator_TrimDiagonal</li>
+    </specialDesignatorClasses>
+    <modExtensions>
+      <li Class="BetterArchitect.NestedCategoryExtension">
+        <parentCategory>Ferny_Decorations</parentCategory>
+      </li>
+    </modExtensions>
+  </DesignationCategoryDef>
+
+</Defs>

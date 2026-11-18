@@ -159,6 +159,23 @@ REQUIRED_TYPES = [
     # here.
     "Patch_TrimDesignators",
     "NeatEdgesMod",
+    # The settings the Mod class reads before the tabs are first built: which
+    # tab holds the shape buttons. Lost, the mod settings list drops the mod
+    # and every player's buttons stay on Floors whatever they chose. Contains
+    # no other name here, and none contains it.
+    "NeatEdgesSettings",
+    # The update note that tells each player once where the shape buttons
+    # went, its window, and the main-menu postfix that opens it. Lost, a
+    # player updating to the new default finds the trims gone from Floors with
+    # no word why. No name here contains another or any name above.
+    "WhatsNewNote",
+    "Dialog_WhatsNew",
+    "Patch_WhatsNewAtMenu",
+    # Moves the shape buttons as the Architect opens when their home changed,
+    # as it does once Better Architect Menu's saved layout loads. Lost, a
+    # player whose layout hides the Trims section finds the trims on no tab.
+    # Contains no other name here, and none contains it.
+    "Patch_PlaceTrimsOnOpen",
 ]
 
 failures = []

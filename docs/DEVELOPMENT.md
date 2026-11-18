@@ -269,13 +269,17 @@ ground: granite pebbles on granite flagstone show nothing.
 | `StripTrimGeometry.cs` | the bands, mitres and UVs of each shape, the diagonal's four kinds of end, and the variant pick, mirrored by `devtools/strip_trim.py` |
 | `TrimPiece.cs` | the extension naming a trim's shape, its strip's band count, variants and paint overlay, read through a blueprint to the def it builds |
 | `CompTrimJoins.cs` | reprints the trims around one that is built or removed, so a diagonal across a section's edge takes its new end; given to every trim def at startup |
-| `Designator_TrimShape.cs` | one build button per shape, on the Floors tab: a left click places the style on it, a right click lists the rest; one subclass per shape, named in the tab's `specialDesignatorClasses` by `Patches/NeatEdges_Designators.xml` so vanilla remakes them whenever the tab is rebuilt |
-| `Patch_TrimDesignators.cs` | the postfix on `DesignationCategoryDef.ResolveDesignators` that takes vanilla's own buttons for the trims off every tab, in every build of it |
-| `NeatEdgesMod.cs` | applies that one patch from a `Mod` constructor, before the game first builds the tabs; everything else is patched from `HarmonyInit` |
+| `Designator_TrimShape.cs` | one build button per shape, on the Floors tab or, by the mod setting, the Misc tab or Better Architect Menu's Decorate tab: a left click places the style on it, a right click lists the rest; one subclass per shape, named in the Floors and Misc tabs' `specialDesignatorClasses` by `Patches/NeatEdges_Designators.xml` and in the Trims section's by `Defs/Misc/NeatEdges_BetterArchitect.xml`, so vanilla remakes them whenever a tab is rebuilt |
+| `Patch_TrimDesignators.cs` | the postfix on `DesignationCategoryDef.ResolveDesignators` that takes vanilla's own buttons for the trims off every tab, in every build of it, and takes the shape buttons off every tab but their home (`HomeFor`); also the rebuild of those tabs when the setting changes, which makes Better Architect Menu forget an emptied Trims section (`ForgetTrimsSection`); whether that mod's saved layout shows the section at all (`SectionListed`), and `Patch_PlaceTrimsOnOpen`, the postfix on `MainTabWindow_Architect.PreOpen` that moves the buttons when their home changed (`PlaceIfMoved`) |
+| `NeatEdgesMod.cs` | reads the settings and applies that one patch from a `Mod` constructor, before the game first builds the tabs, and draws the settings window; everything else is patched from `HarmonyInit` |
+| `NeatEdgesSettings.cs` | the mod settings: whether the shape buttons leave the Floors tab (on by default since 1.2.0), and the id of the last update note the player closed |
+| `WhatsNewNote.cs` | the update note shown once per player at the main menu, the `UIRoot_Entry.Init` postfix that opens it, and its window: 1.2.0's says where the shape buttons went and offers to put them back on Floors |
 
 Outside `Source/`: `Defs/ThingDefs_Buildings/` holds the marker
 (`NeatEdges_Edges.xml`) and the trims (`NeatEdges_Trims.xml`),
 `Defs/Misc/NeatEdges_TrimShapes.xml` holds each shape's dropdown group,
+`Defs/Misc/NeatEdges_BetterArchitect.xml` the Trims section that exists only
+while Better Architect Menu is loaded,
 `Patches/NeatEdges_Designators.xml` puts the two area tools on the Zone tab,
 and `Languages/English/Keyed/NeatEdges.xml` holds every string the C# shows a
 player. `devtools/` holds the art generators and the renderer they share
